@@ -1,312 +1,218 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Админ-панель: Детская школа карате</title>
-  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap');
-
-    body {
-      margin: 0;
-      font-family: 'Inter', sans-serif;
-      background: #1F2937;
-      color: #F3F4F6;
-      overflow-y: auto;
-    }
-
-    .section { padding: 16px; }
-    .section-title {
-      font-family: 'Noto Sans JP', sans-serif;
-      font-size: 24px;
-      font-weight: 700;
-      margin: 8px 0;
-      color: #14B8A6;
-      text-align: center;
-    }
-
-    .card {
-      background: linear-gradient(135deg, rgba(31, 41, 55, 0.5), rgba(55, 65, 81, 0.3));
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(20, 184, 166, 0.3);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-
-    .form-group {
-      margin-bottom: 12px;
-    }
-
-    .form-group label {
-      font-size: 14px;
-      color: #6B7280;
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .form-group input,
-    .form-group select {
-      padding: 8px;
-      border: 1px solid #4B5563;
-      border-radius: 5px;
-      background: #374151;
-      color: #F3F4F6;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .form-group select {
-      appearance: none;
-      background-image: url('data:image/svg+xml;utf8,<svg fill="%236B7280" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>');
-      background-repeat: no-repeat;
-      background-position: right 5px center;
-      background-size: 12px;
-    }
-
-    .form-group button {
-      padding: 8px;
-      background: #14B8A6;
-      color: #F3F4F6;
-      border: none;
-      border-radius: 5px;
-      font-family: 'Noto Sans JP', sans-serif;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-    }
-
-    .form-group button:hover {
-      background: #F28C38;
-      transform: scale(1.05);
-    }
-
-    .booking-list, .payment-list, .rating-list {
-      max-height: 300px;
-      overflow-y: auto;
-    }
-
-    .booking-item, .payment-item, .rating-item {
-      padding: 8px;
-      border-bottom: 1px solid rgba(243, 244, 246, 0.1);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .booking-item:last-child, .payment-item:last-child, .rating-item:last-child {
-      border-bottom: none;
-    }
-
-    .booking-item button, .payment-item button {
-      padding: 4px 8px;
-      background: #ef4444;
-      color: #F3F4F6;
-      border: none;
-      border-radius: 5px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .booking-item button:hover, .payment-item button:hover {
-      background: #dc2626;
-    }
-
-    .spinner {
-      border: 3px solid rgba(20, 184, 166, 0.2);
-      border-top: 3px solid #14B8A6;
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      animation: spin 1s linear infinite;
-      margin: 12px auto;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #111827; color: #d1d5db; font-family: 'Inter', sans-serif; }
+        .tab-button { transition: all 0.2s; }
+        .tab-button.active { background-color: #14B8A6; color: white; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #14B8A6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
-<body>
-  <section class="section">
-    <h2 class="section-title">Админ-панель</h2>
-    <div class="card">
-      <h3 class="text-lg font-semibold mb-4 text-white">Управление записями</h3>
-      <div class="booking-list" id="booking-list"><div class="spinner"></div></div>
-    </div>
-    <div class="card">
-      <h3 class="text-lg font-semibold mb-4 text-white">Добавить платеж</h3>
-      <form id="payment-form" class="form-group">
-        <div class="form-group">
-          <label for="payment-child-name">Имя ребенка</label>
-          <input type="text" id="payment-child-name" name="childName" required>
-        </div>
-        <div class="form-group">
-          <label for="payment-amount">Сумма (₽)</label>
-          <input type="number" id="payment-amount" name="amount" required>
-        </div>
-        <div class="form-group">
-          <label for="payment-type">Тип платежа</label>
-          <select id="payment-type" name="paymentType" required>
-            <option value="Онлайн">Онлайн</option>
-            <option value="Наличные">Наличные</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="payment-date">Дата платежа</label>
-          <input type="date" id="payment-date" name="paymentDate" required>
-        </div>
-        <button type="submit">Добавить платеж</button>
-      </form>
-    </div>
-    <div class="card">
-      <h3 class="text-lg font-semibold mb-4 text-white">Платежи</h3>
-      <div class="payment-list" id="payment-list"><div class="spinner"></div></div>
-    </div>
-    <div class="card">
-      <h3 class="text-lg font-semibold mb-4 text-white">Добавить рейтинг</h3>
-      <form id="rating-form" class="form-group">
-        <div class="form-group">
-          <label for="rating-child-name">Имя ребенка</label>
-          <input type="text" id="rating-child-name" name="childName" required>
-        </div>
-        <div class="form-group">
-          <label for="rating-group">Группа</label>
-          <select id="rating-group" name="group" required>
-            <option value="Младшая (4-6 лет)">Младшая (4-6 лет)</option>
-            <option value="Средняя (7-10 лет)">Средняя (7-10 лет)</option>
-            <option value="Старшая (11-14 лет)">Старшая (11-14 лет)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="rating-belt">Пояс</label>
-          <select id="rating-belt" name="belt" required>
-            <option value="Белый">Белый</option>
-            <option value="Жёлтый">Жёлтый</option>
-            <option value="Оранжевый">Оранжевый</option>
-            <option value="Зелёный">Зелёный</option>
-            <option value="Синий">Синий</option>
-            <option value="Коричневый">Коричневый</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="rating-points">Баллы</label>
-          <input type="number" id="rating-points" name="points" required>
-        </div>
-        <button type="submit">Добавить рейтинг</button>
-      </form>
-    </div>
-    <div class="card">
-      <h3 class="text-lg font-semibold mb-4 text-white">Рейтинг учеников</h3>
-      <div class="rating-list" id="rating-list"><div class="spinner"></div></div>
-    </div>
-  </section>
+<body class="p-4">
 
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const WEB_APP_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL';
-      AOS.init({ duration: 600, once: true, offset: 20 });
+    <div id="login-screen" class="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg shadow-xl">
+        <h1 class="text-2xl font-bold text-center text-teal-400 mb-4">Вход для администратора</h1>
+        <input type="password" id="password-input" placeholder="Введите пароль" class="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500">
+        <button id="login-button" class="w-full mt-4 p-2 bg-teal-500 text-white rounded hover:bg-teal-600">Войти</button>
+        <p id="login-error" class="text-red-500 text-center mt-2"></p>
+    </div>
 
-      async function fetchBookings() {
-        const response = await fetch(WEB_APP_URL);
-        const result = await response.json();
-        const bookingList = document.getElementById('booking-list');
-        bookingList.innerHTML = '';
-        const bookings = await fetch(WEB_APP_URL + '?action=getBookings').then(res => res.json());
-        bookings.data.forEach(booking => {
-          const item = document.createElement('div');
-          item.classList.add('booking-item');
-          item.innerHTML = `
-            <span>${booking.childName} - ${booking.selectedDate} ${booking.selectedTime} (${booking.selectedGroup})</span>
-            <button onclick="deleteBooking('${booking.selectedDate}', '${booking.childName}', '${booking.selectedGroup}')">Удалить</button>
-          `;
-          bookingList.appendChild(item);
-        });
-      }
+    <div id="admin-panel" class="hidden">
+        <h1 class="text-3xl font-bold text-center text-teal-400 mb-6">Панель управления</h1>
+        
+        <div class="flex justify-center mb-4 border-b border-gray-700">
+            <button id="tab-bookings" class="tab-button active py-2 px-4 font-semibold">Предстоящие Записи</button>
+            <button id="tab-students" class="tab-button py-2 px-4 font-semibold">База Учеников</button>
+        </div>
 
-      async function fetchPayments() {
-        const response = await fetch(WEB_APP_URL + '?action=getPayments');
-        const result = await response.json();
-        const paymentList = document.getElementById('payment-list');
-        paymentList.innerHTML = '';
-        result.data.forEach(payment => {
-          const item = document.createElement('div');
-          item.classList.add('payment-item');
-          item.innerHTML = `
-            <span>${payment.childName} - ${payment.amount} ₽ (${payment.paymentType}, ${payment.paymentDate})</span>
-          `;
-          paymentList.appendChild(item);
-        });
-      }
+        <div id="loader" class="flex justify-center my-8"><div class="loader"></div></div>
+        
+        <div id="content-bookings"></div>
+        <div id="content-students" class="hidden"></div>
+    </div>
 
-      async function fetchRatings() {
-        const response = await fetch(WEB_APP_URL + '?action=getRatings');
-        const result = await response.json();
-        const ratingList = document.getElementById('rating-list');
-        ratingList.innerHTML = '';
-        result.data.forEach(rating => {
-          const item = document.createElement('div');
-          item.classList.add('rating-item');
-          item.innerHTML = `
-            <span>${rating.childName} - ${rating.group}, ${rating.belt}, ${rating.points} баллов</span>
-          `;
-          ratingList.appendChild(item);
-        });
-      }
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbysJxowCL4FiPooWHw4APxlGhO4CxAgb_9b8hU3HtNfGcYSgjD5_84sRp-xYpUHEmaUwg/exec'; // <-- !!! ВАЖНО: ВСТАВЬТЕ СЮДА ВАШ URL !!!
+    
+    const loginScreen = document.getElementById('login-screen');
+    const adminPanel = document.getElementById('admin-panel');
+    const passwordInput = document.getElementById('password-input');
+    const loginButton = document.getElementById('login-button');
+    const loginError = document.getElementById('login-error');
+    const loader = document.getElementById('loader');
+    
+    const contentBookings = document.getElementById('content-bookings');
+    const contentStudents = document.getElementById('content-students');
+    const tabBookings = document.getElementById('tab-bookings');
+    const tabStudents = document.getElementById('tab-students');
 
-      async function deleteBooking(date, childName, group) {
-        if (confirm('Удалить запись?')) {
-          await fetch(WEB_APP_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              event: 'delete_booking',
-              additional: { selectedDate: date, childName, selectedGroup: group }
-            })
-          });
-          fetchBookings();
+    let adminPassword = '';
+
+    loginButton.addEventListener('click', () => {
+        adminPassword = passwordInput.value;
+        if (!adminPassword) {
+            loginError.textContent = 'Пароль не может быть пустым.';
+            return;
         }
-      }
-
-      document.getElementById('payment-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.target).entries());
-        await fetch(WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            event: 'add_payment',
-            additional: data
-          })
-        });
-        e.target.reset();
-        fetchPayments();
-      });
-
-      document.getElementById('rating-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.target).entries());
-        await fetch(WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            event: 'add_rating',
-            additional: data
-          })
-        });
-        e.target.reset();
-        fetchRatings();
-      });
-
-      fetchBookings();
-      fetchPayments();
-      fetchRatings();
+        loginError.textContent = '';
+        loginScreen.classList.add('hidden');
+        adminPanel.classList.remove('hidden');
+        loadAdminData();
     });
-  </script>
+
+    tabBookings.addEventListener('click', () => switchTab('bookings'));
+    tabStudents.addEventListener('click', () => switchTab('students'));
+
+    function switchTab(tabName) {
+        if (tabName === 'bookings') {
+            tabBookings.classList.add('active');
+            tabStudents.classList.remove('active');
+            contentBookings.classList.remove('hidden');
+            contentStudents.classList.add('hidden');
+        } else {
+            tabBookings.classList.remove('active');
+            tabStudents.classList.add('active');
+            contentBookings.classList.add('hidden');
+            contentStudents.classList.remove('hidden');
+        }
+    }
+
+    async function loadAdminData() {
+        loader.style.display = 'flex';
+        contentBookings.innerHTML = '';
+        contentStudents.innerHTML = '';
+
+        try {
+            const response = await fetch(`${WEB_APP_URL}?action=get_admin_data`);
+            if (!response.ok) throw new Error('Ошибка сети');
+            const result = await response.json();
+            if (result.status !== 'success') throw new Error(result.message);
+            
+            renderBookings(result.bookings);
+            renderStudents(result.students);
+
+        } catch (error) {
+            alert(`Не удалось загрузить данные: ${error.message}`);
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+    async function performAdminAction(sub_action, booking_id, user_id) {
+        loader.style.display = 'flex';
+        try {
+            const response = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                    event: 'admin_action',
+                    password: adminPassword,
+                    sub_action,
+                    booking_id,
+                    user_id
+                })
+            });
+            if (!response.ok) throw new Error('Ошибка сети');
+            const result = await response.json();
+            if (result.status !== 'success') throw new Error(result.message);
+            
+            alert(result.message);
+            loadAdminData(); // Перезагружаем данные после успешного действия
+
+        } catch (error) {
+            alert(`Ошибка: ${error.message}`);
+            loader.style.display = 'none';
+        }
+    }
+
+    function renderBookings(bookings) {
+        if (bookings.length === 0) {
+            contentBookings.innerHTML = '<p class="text-center text-gray-400">Предстоящих записей нет.</p>';
+            return;
+        }
+
+        // Сортировка по дате
+        bookings.sort((a, b) => {
+            const dateA = new Date(a[6].split('.').reverse().join('-'));
+            const dateB = new Date(b[6].split('.').reverse().join('-'));
+            return dateA - dateB;
+        });
+
+        let html = '<div class="space-y-4">';
+        bookings.forEach(row => {
+            const [bookingId, , userId, , childName, , date, group, , , paymentStatus] = row;
+            html += `
+                <div class="bg-gray-800 p-4 rounded-lg shadow-md flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <p class="font-bold text-lg text-white">${childName}</p>
+                        <p class="text-sm text-gray-400">${date} - ${group}</p>
+                        <p class="text-sm ${paymentStatus === 'Оплачено' ? 'text-green-400' : 'text-yellow-400'}">${paymentStatus}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="mark-attendance-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded" data-booking-id="${bookingId}" data-user-id="${userId}">Присутствовал</button>
+                        <button class="delete-booking-btn bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded" data-booking-id="${bookingId}">Удалить</button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        contentBookings.innerHTML = html;
+    }
+
+    function renderStudents(students) {
+        if (students.length === 0) {
+            contentStudents.innerHTML = '<p class="text-center text-gray-400">Учеников в базе нет.</p>';
+            return;
+        }
+        let html = `
+            <div class="bg-gray-800 p-4 rounded-lg shadow-md">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="p-2">Имя Ученика</th>
+                            <th class="p-2">Осталось Занятий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        students.forEach(row => {
+            const [, childName, classesRemaining] = row;
+            html += `
+                <tr class="border-b border-gray-700">
+                    <td class="p-2">${childName}</td>
+                    <td class="p-2 font-bold ${classesRemaining > 0 ? 'text-green-400' : 'text-red-400'}">${classesRemaining}</td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table></div>';
+        contentStudents.innerHTML = html;
+    }
+
+    // Делегирование событий для кнопок
+    document.body.addEventListener('click', e => {
+        if (e.target.classList.contains('mark-attendance-btn')) {
+            const bookingId = e.target.dataset.bookingId;
+            const userId = e.target.dataset.userId;
+            if (confirm('Отметить посещение? С ученика спишется одно занятие.')) {
+                performAdminAction('mark_attendance', bookingId, userId);
+            }
+        }
+        if (e.target.classList.contains('delete-booking-btn')) {
+            const bookingId = e.target.dataset.bookingId;
+            if (confirm('Вы уверены, что хотите удалить эту запись?')) {
+                performAdminAction('delete_booking', bookingId);
+            }
+        }
+    });
+});
+</script>
 </body>
 </html>
