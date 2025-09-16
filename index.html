@@ -1,205 +1,131 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админ-панель</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { background-color: #111827; color: #d1d5db; font-family: 'Inter', sans-serif; }
-        .tab-button { transition: all 0.2s; }
-        .tab-button.active { background-color: #14B8A6; color: white; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #14B8A6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CRM — Редактировать занятия</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body{background:#f5f8fb; font-family:Inter,system-ui,Arial; padding:14px;}
+  .card{border-radius:12px; box-shadow:0 8px 30px rgba(20,30,60,0.04); margin-bottom:12px;}
+  .child-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #eef3f7;}
+  .child-row:last-child{border-bottom:0;}
+  .controls button{width:36px;height:36px;border-radius:8px;border:0;font-weight:700;}
+  .controls .minus{background:#ffe6e6;color:#b20000;}
+  .controls .plus{background:#e6fff0;color:#007a33;}
+  .small-muted{color:#6c757d;font-size:0.92rem;}
+</style>
 </head>
-<body class="p-4">
+<body>
+  <div class="container" style="max-width:760px;">
+    <h3 class="mb-3">CRM — Быстро поправить количество занятий</h3>
 
-    <div id="login-screen" class="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg shadow-xl">
-        <h1 class="text-2xl font-bold text-center text-teal-400 mb-4">Вход для администратора</h1>
-        <input type="password" id="password-input" placeholder="Введите пароль" class="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500">
-        <button id="login-button" class="w-full mt-4 p-2 bg-teal-500 text-white rounded hover:bg-teal-600">Войти</button>
-        <p id="login-error" class="text-red-500 text-center mt-2"></p>
+    <div class="card p-3 mb-3">
+      <div class="d-flex gap-2">
+        <button id="btnRefresh" class="btn btn-outline-primary">Обновить список</button>
+        <input id="search" class="form-control" placeholder="Поиск по имени или ID" style="max-width:320px"/>
+      </div>
+      <div class="small-muted mt-2">Нажмите + чтобы прибавить занятие, − чтобы списать. Изменения сохраняются мгновенно.</div>
     </div>
 
-    <div id="admin-panel" class="hidden">
-        <h1 class="text-3xl font-bold text-center text-teal-400 mb-6">Панель управления</h1>
-        
-        <div class="flex justify-center mb-4 border-b border-gray-700">
-            <button id="tab-bookings" class="tab-button active py-2 px-4 font-semibold">Предстоящие Записи</button>
-            <button id="tab-students" class="tab-button py-2 px-4 font-semibold">База Учеников</button>
-        </div>
-
-        <div id="loader" class="flex justify-center my-8"><div class="loader"></div></div>
-        
-        <div id="content-bookings"></div>
-        <div id="content-students" class="hidden"></div>
+    <div class="card p-0" id="childrenCard">
+      <div id="childrenList" style="padding:8px;color:#777">Нажмите "Обновить список"</div>
     </div>
+  </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyyZ5SVN19vprrFaz9TSpm3YnhpWC5wUGm_iDDVZBVvxWnNGcCe9ie558kQtJAtt9AW/exec'; // <-- !!! ВАЖНО: ВСТАВЬТЕ СЮДА ВАШ URL !!!
-    
-    const loginScreen = document.getElementById('login-screen');
-    const adminPanel = document.getElementById('admin-panel');
-    const passwordInput = document.getElementById('password-input');
-    const loginButton = document.getElementById('login-button');
-    const loginError = document.getElementById('login-error');
-    const loader = document.getElementById('loader');
-    
-    const contentBookings = document.getElementById('content-bookings');
-    const contentStudents = document.getElementById('content-students');
-    const tabBookings = document.getElementById('tab-bookings');
-    const tabStudents = document.getElementById('tab-students');
+const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- замени на свой
+const btnRefresh = document.getElementById('btnRefresh');
+const childrenList = document.getElementById('childrenList');
+const searchEl = document.getElementById('search');
 
-    let adminPassword = '';
+let allChildren = [];
 
-    loginButton.addEventListener('click', () => {
-        adminPassword = passwordInput.value;
-        if (!adminPassword) {
-            loginError.textContent = 'Пароль не может быть пустым.';
-            return;
-        }
-        loginError.textContent = '';
-        loginScreen.classList.add('hidden');
-        adminPanel.classList.remove('hidden');
-        loadAdminData();
+btnRefresh.addEventListener('click', loadChildren);
+searchEl.addEventListener('input', renderChildren);
+
+async function loadChildren(){
+  childrenList.innerHTML = '<div style="padding:12px;color:#666">Загрузка...</div>';
+  try {
+    const resp = await fetch(`${gasUrl}?action=getAllChildren`);
+    const data = await resp.json();
+    if (!data.success) { childrenList.innerHTML = '<div style="padding:12px;color:#c00">Ошибка загрузки</div>'; return; }
+    allChildren = data.children || [];
+    renderChildren();
+  } catch (err) {
+    console.error(err);
+    childrenList.innerHTML = '<div style="padding:12px;color:#c00">Ошибка сети</div>';
+  }
+}
+
+function renderChildren(){
+  const q = (searchEl.value || '').toLowerCase().trim();
+  const list = allChildren.filter(c => !q || c.childName.toLowerCase().includes(q) || c.telegramID.includes(q));
+  if (list.length === 0) { childrenList.innerHTML = '<div style="padding:12px;color:#666">Ничего не найдено</div>'; return; }
+  childrenList.innerHTML = list.map(c => {
+    return `<div class="child-row" data-telegram="${escapeHtml(c.telegramID)}" data-name="${escapeHtml(c.childName)}">
+      <div>
+        <div style="font-weight:700">${escapeHtml(c.childName)}</div>
+        <div class="small-muted">ID: ${escapeHtml(c.telegramID)} • Осталось: <span class="remaining">${Number(c.remaining)}</span></div>
+      </div>
+      <div class="controls" style="display:flex;gap:8px;align-items:center">
+        <button class="minus" title="Убавить">−</button>
+        <button class="plus" title="Прибавить">+</button>
+      </div>
+    </div>`;
+  }).join('');
+  // attach handlers
+  document.querySelectorAll('.child-row').forEach(row => {
+    const minus = row.querySelector('.minus');
+    const plus = row.querySelector('.plus');
+    minus.addEventListener('click', () => changeRemaining(row, -1));
+    plus.addEventListener('click', () => changeRemaining(row, +1));
+  });
+}
+
+async function changeRemaining(row, delta){
+  const telegramID = row.getAttribute('data-telegram');
+  const childName = row.getAttribute('data-name');
+  const remEl = row.querySelector('.remaining');
+  let current = Number(remEl.innerText || 0);
+  // optimistic UI
+  const newVal = Math.max(0, current + delta);
+  remEl.innerText = newVal;
+
+  // choose action
+  const action = delta > 0 ? 'incRemaining' : 'decRemaining';
+  // send as form-urlencoded to avoid preflight
+  const params = new URLSearchParams();
+  params.append('action', action);
+  params.append('telegramID', telegramID);
+  params.append('childName', childName);
+
+  try {
+    const resp = await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: params.toString()
     });
-
-    tabBookings.addEventListener('click', () => switchTab('bookings'));
-    tabStudents.addEventListener('click', () => switchTab('students'));
-
-    function switchTab(tabName) {
-        if (tabName === 'bookings') {
-            tabBookings.classList.add('active');
-            tabStudents.classList.remove('active');
-            contentBookings.classList.remove('hidden');
-            contentStudents.classList.add('hidden');
-        } else {
-            tabBookings.classList.remove('active');
-            tabStudents.classList.add('active');
-            contentBookings.classList.add('hidden');
-            contentStudents.classList.remove('hidden');
-        }
+    const result = await resp.json();
+    if (!result.success) {
+      // rollback UI
+      remEl.innerText = current;
+      alert(result.message || 'Ошибка изменения');
+    } else {
+      remEl.innerText = Number(result.remaining);
+      // update local cache
+      const idx = allChildren.findIndex(c => c.telegramID === telegramID && c.childName === childName);
+      if (idx >= 0) allChildren[idx].remaining = Number(result.remaining);
     }
+  } catch (err) {
+    console.error(err);
+    remEl.innerText = current;
+    alert('Ошибка сети');
+  }
+}
 
-    async function loadAdminData() {
-        loader.style.display = 'flex';
-        contentBookings.innerHTML = '';
-        contentStudents.innerHTML = '';
+function escapeHtml(s){ if (s === undefined || s === null) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;"); }
 
-        try {
-            const response = await fetch(`${WEB_APP_URL}?action=get_admin_data`);
-            if (!response.ok) throw new Error('Ошибка сети');
-            const result = await response.json();
-            if (result.status !== 'success') throw new Error(result.message);
-            
-            renderBookings(result.bookings);
-            renderStudents(result.students);
-
-        } catch (error) {
-            alert(`Не удалось загрузить данные: ${error.message}`);
-        } finally {
-            loader.style.display = 'none';
-        }
-    }
-
-    async function performAdminAction(sub_action, booking_id, user_id) {
-        loader.style.display = 'flex';
-        try {
-            const response = await fetch(WEB_APP_URL, {
-                method: 'POST',
-                mode: 'cors',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                    event: 'admin_action',
-                    password: adminPassword,
-                    sub_action,
-                    booking_id,
-                    user_id
-                })
-            });
-            if (!response.ok) throw new Error('Ошибка сети');
-            const result = await response.json();
-            if (result.status !== 'success') throw new Error(result.message);
-            
-            alert(result.message);
-            loadAdminData();
-
-        } catch (error) {
-            alert(`Ошибка: ${error.message}`);
-            loader.style.display = 'none';
-        }
-    }
-
-    function renderBookings(bookings) {
-        if (bookings.length === 0) {
-            contentBookings.innerHTML = '<p class="text-center text-gray-400">Предстоящих записей нет.</p>';
-            return;
-        }
-
-        bookings.sort((a, b) => {
-            const dateA = new Date(a[6].split('.').reverse().join('-'));
-            const dateB = new Date(b[6].split('.').reverse().join('-'));
-            return dateA - dateB;
-        });
-
-        let html = '<div class="space-y-4">';
-        bookings.forEach(row => {
-            const [bookingId, , userId, , childName, , date, group, , , paymentStatus] = row;
-            html += `
-                <div class="bg-gray-800 p-4 rounded-lg shadow-md flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                        <p class="font-bold text-lg text-white">${childName}</p>
-                        <p class="text-sm text-gray-400">${date} - ${group}</p>
-                        <p class="text-sm ${paymentStatus === 'Оплачено' ? 'text-green-400' : 'text-yellow-400'}">${paymentStatus}</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="mark-attendance-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded" data-booking-id="${bookingId}" data-user-id="${userId}">Присутствовал</button>
-                        <button class="delete-booking-btn bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded" data-booking-id="${bookingId}">Удалить</button>
-                    </div>
-                </div>
-            `;
-        });
-        html += '</div>';
-        contentBookings.innerHTML = html;
-    }
-
-    function renderStudents(students) {
-        if (students.length === 0) {
-            contentStudents.innerHTML = '<p class="text-center text-gray-400">Учеников в базе нет.</p>';
-            return;
-        }
-        let html = `
-            <div class="bg-gray-800 p-4 rounded-lg shadow-md">
-                <table class="w-full text-left">
-                    <thead><tr class="border-b border-gray-700"><th class="p-2">Имя Ученика</th><th class="p-2">Осталось Занятий</th></tr></thead><tbody>`;
-        students.forEach(row => {
-            const [, childName, classesRemaining] = row;
-            html += `
-                <tr class="border-b border-gray-700"><td class="p-2">${childName}</td><td class="p-2 font-bold ${classesRemaining > 0 ? 'text-green-400' : 'text-red-400'}">${classesRemaining}</td></tr>`;
-        });
-        html += '</tbody></table></div>';
-        contentStudents.innerHTML = html;
-    }
-
-    document.body.addEventListener('click', e => {
-        if (e.target.classList.contains('mark-attendance-btn')) {
-            const bookingId = e.target.dataset.bookingId;
-            const userId = e.target.dataset.userId;
-            if (confirm('Отметить посещение? С ученика спишется одно занятие.')) {
-                performAdminAction('mark_attendance', bookingId, userId);
-            }
-        }
-        if (e.target.classList.contains('delete-booking-btn')) {
-            const bookingId = e.target.dataset.bookingId;
-            if (confirm('Вы уверены, что хотите удалить эту запись?')) {
-                performAdminAction('delete_booking', bookingId);
-            }
-        }
-    });
-});
 </script>
 </body>
 </html>
