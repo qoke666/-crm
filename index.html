@@ -24,7 +24,11 @@
   .switch { cursor:pointer; padding:6px 10px;border-radius:8px;border:1px solid rgba(10,20,40,0.06); background:#fff }
   .small-info{font-size:13px;color:var(--muted)}
   /* controls for +/- */
-  .counter-btn { padding:6px 10px;border-radius:8px;border:1px solid rgba(10,20,40,0.06); background:#fff; cursor:pointer; font-weight:700 }
+  .counter-btn { 
+    padding:6px 10px;border-radius:8px;border:1px solid rgba(10,20,40,0.06); background:#fff; cursor:pointer; font-weight:700; 
+    transition: transform 0.1s ease;
+  }
+  .counter-btn:active { transform: scale(0.95); }
   .counter-col { display:flex; gap:6px; align-items:center; }
   /* schedule */
   .event-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;border:1px solid #f0f4fb;margin-bottom:6px}
@@ -328,34 +332,84 @@ function renderAttendanceList(children){
     const remValDisplay = row.querySelector('.rem-val-display');
     const extraValDisplay = row.querySelector('.extra-val-display');
 
-    // Helper to update local cache and display
-    function updateLocalAndDisplay(action, delta) {
+    // Helper to update local cache and display (optimistic)
+    function updateLocalAndDisplay(action, delta, displayEl, valKey, backupVal) {
       const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
       if (!child) return;
-      if (action === 'incRemaining' || action === 'decRemaining') {
-        child.remaining = Math.max(0, Number(child.remaining || 0) + delta);
-        remValDisplay.textContent = child.remaining;
-      } else if (action === 'incExtra' || action === 'decExtra') {
-        child.extra = Math.max(0, Number(child.extra || 0) + delta);
-        extraValDisplay.textContent = child.extra;
-      }
+      child[valKey] = Math.max(0, Number(child[valKey] || 0) + delta);
+      displayEl.textContent = child[valKey];
+      // If API fails, rollback
+      setTimeout(() => {
+        if (backupVal !== undefined && child[valKey] !== backupVal) {
+          child[valKey] = backupVal;
+          displayEl.textContent = backupVal;
+          alert('Ошибка сохранения, значение откатилось');
+        }
+      }, 5000); // Timeout for rollback if needed, but usually API succeeds
     }
 
+    // Optimistic dec remaining
     remDec.addEventListener('click', async ()=>{
-      await callIncDec('decRemaining', tg, name);
-      updateLocalAndDisplay('decRemaining', -1);
+      const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
+      if (!child) return;
+      const backupRem = Number(child.remaining || 0);
+      updateLocalAndDisplay('decRemaining', -1, remValDisplay, 'remaining', backupRem);
+      try {
+        await callIncDec('decRemaining', tg, name);
+      } catch (err) {
+        // Rollback on error
+        child.remaining = backupRem;
+        remValDisplay.textContent = backupRem;
+        console.error(err);
+      }
     });
+
+    // Optimistic inc remaining
     remInc.addEventListener('click', async ()=>{
-      await callIncDec('incRemaining', tg, name);
-      updateLocalAndDisplay('incRemaining', +1);
+      const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
+      if (!child) return;
+      const backupRem = Number(child.remaining || 0);
+      updateLocalAndDisplay('incRemaining', +1, remValDisplay, 'remaining', backupRem);
+      try {
+        await callIncDec('incRemaining', tg, name);
+      } catch (err) {
+        // Rollback on error
+        child.remaining = backupRem;
+        remValDisplay.textContent = backupRem;
+        console.error(err);
+      }
     });
+
+    // Optimistic dec extra
     extraDec.addEventListener('click', async ()=>{
-      await callIncDec('decExtra', tg, name);
-      updateLocalAndDisplay('decExtra', -1);
+      const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
+      if (!child) return;
+      const backupExtra = Number(child.extra || 0);
+      updateLocalAndDisplay('decExtra', -1, extraValDisplay, 'extra', backupExtra);
+      try {
+        await callIncDec('decExtra', tg, name);
+      } catch (err) {
+        // Rollback on error
+        child.extra = backupExtra;
+        extraValDisplay.textContent = backupExtra;
+        console.error(err);
+      }
     });
+
+    // Optimistic inc extra
     extraInc.addEventListener('click', async ()=>{
-      await callIncDec('incExtra', tg, name);
-      updateLocalAndDisplay('incExtra', +1);
+      const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
+      if (!child) return;
+      const backupExtra = Number(child.extra || 0);
+      updateLocalAndDisplay('incExtra', +1, extraValDisplay, 'extra', backupExtra);
+      try {
+        await callIncDec('incExtra', tg, name);
+      } catch (err) {
+        // Rollback on error
+        child.extra = backupExtra;
+        extraValDisplay.textContent = backupExtra;
+        console.error(err);
+      }
     });
   });
 }
@@ -371,7 +425,7 @@ async function callIncDec(action, telegramID, childName){
     const res = await resp.json();
     if (!res.success && typeof res.success !== 'undefined') console.warn('incDec failed',res);
     return res;
-  } catch (err) { console.error(err); }
+  } catch (err) { console.error(err); throw err; } // Re-throw for rollback
 }
 
 /* ---------------- Schedule ---------------- */
