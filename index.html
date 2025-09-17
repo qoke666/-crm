@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CRM — Управление занятиями и группами</title>
+<title>CRM — занятия и группы (обновлённая)</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
   body{background:#f5f8fb; font-family:Inter,system-ui,Arial; padding:14px;}
@@ -16,10 +16,8 @@
   .child-row.dragging{opacity:0.5; transform:scale(0.98);}
   .child-left { max-width:60%; }
   .controls { display:flex; gap:6px; align-items:center; }
-  /* обычные занятия: зелёный/красный */
   .btn-plus { background:#e6fff0; color:#007a33; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
   .btn-minus { background:#ffe6e6; color:#b20000; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
-  /* отработки: бирюзовый/оранжевый */
   .btn-plus-extra { background:#e6f7ff; color:#006fa6; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
   .btn-minus-extra { background:#fff4e6; color:#b25a00; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
   .small-muted{color:#6c757d;font-size:0.92rem;}
@@ -30,41 +28,43 @@
 </head>
 <body>
   <div class="container" style="max-width:980px;">
-    <h3 class="mb-3">CRM — занятия и группы</h3>
+    <h3 class="mb-3">CRM — занятия и группы (обновлённая)</h3>
 
     <div class="card p-3 mb-3">
       <div class="d-flex gap-2 flex-wrap">
         <button id="btnRefresh" class="btn btn-outline-primary">Обновить список</button>
         <input id="search" class="form-control search" placeholder="Поиск по имени или ID" />
         <select id="groupFilter" class="form-select" style="max-width:220px;">
-          <option value="">Показать: Все группы</option>
+          <option value="">Показать: Все</option>
+          <option value="unassigned">Нераспределённые</option>
           <option value="novye_shkolniki">Новые школьники</option>
           <option value="doshkolniki">Дошкольники</option>
           <option value="starii">Старшая группа</option>
         </select>
       </div>
-      <div class="small-muted mt-2">Перетаскивайте карточки между группами, чтобы присвоить группу ребёнку. Кнопки рядом меняют количество занятий (обычные и отработки).</div>
+      <div class="small-muted mt-2">Перетаскивайте карточки между группами. Кнопки рядом меняют количество занятий и отработок.</div>
     </div>
 
-    <!-- группы -->
+    <!-- groups -->
     <div class="groups" id="groupsWrap">
-      <!-- buckets динамически -->
+      <!-- buckets генерируются динамически -->
     </div>
 
     <div class="card p-3">
       <div class="d-flex gap-2">
         <button id="btnExport" class="btn btn-outline-secondary">Экспорт CSV</button>
-        <div class="small-muted ms-auto">Данные синхронизируются мгновенно при нажатии +/− или при перемещении.</div>
+        <div class="small-muted ms-auto">Данные синхронизируются при нажатии +/− или при перемещении.</div>
       </div>
     </div>
   </div>
 
 <script>
-const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- замени если нужно
+const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- замени на свой
 
-let allChildren = []; // каждый элемент: {telegramID, childName, remaining, extra, group}
+let allChildren = []; // {telegramID, childName, remaining, extra, group}
 const groupsList = [
   { id: '', title: 'Все' },
+  { id: 'unassigned', title: 'Нераспределённые' },
   { id: 'novye_shkolniki', title: 'Новые школьники' },
   { id: 'doshkolniki', title: 'Дошкольники' },
   { id: 'starii', title: 'Старшая группа' }
@@ -79,15 +79,21 @@ searchEl.addEventListener('input', renderBuckets);
 groupFilter.addEventListener('change', renderBuckets);
 document.getElementById('btnExport').addEventListener('click', exportCSV);
 
+// load all children from server (getAllChildren)
 async function loadChildren(){
   childrenWrap.innerHTML = '<div class="card p-3">Загрузка...</div>';
   try {
     const resp = await fetch(`${gasUrl}?action=getAllChildren`);
     const data = await resp.json();
     if (!data.success) { childrenWrap.innerHTML = '<div class="card p-3 text-danger">Ошибка загрузки</div>'; return; }
-    allChildren = data.children || [];
-    // normalize group values (empty string if undefined)
-    allChildren = allChildren.map(c => ({ ...c, group: c.group || '' }));
+    // normalize: ensure group and extra exist
+    allChildren = (data.children || []).map(c => ({
+      telegramID: c.telegramID || '',
+      childName: c.childName || '',
+      remaining: Number(c.remaining || 0),
+      extra: Number(c.extra || 0),
+      group: (c.group || '').trim()
+    }));
     renderBuckets();
   } catch (err) {
     console.error(err);
@@ -95,24 +101,39 @@ async function loadChildren(){
   }
 }
 
+// render buckets (All + Unassigned + groups)
 function renderBuckets(){
   const q = (searchEl.value || '').toLowerCase().trim();
-  const filterGroup = groupFilter.value;
+  const filter = groupFilter.value; // '' or specific or 'unassigned'
   childrenWrap.innerHTML = groupsList.map(g => {
-    // compute header with count
+    // select items for this bucket
     const list = allChildren.filter(c => {
-      if (filterGroup && g.id !== '' && g.id !== filterGroup) return false;
-      if (filterGroup && g.id === '' && filterGroup) return false;
-      // if bucket is specific group, show only that group
-      if (g.id && c.group !== g.id) return false;
-      // if bucket is 'all' (id === ''), show all groups (unless groupFilter restricts)
+      // groupFilter applied: if filter set, only show that bucket (unless filter === '')
+      if (filter) {
+        if (filter === 'unassigned') {
+          if (c.group && c.group !== '') return false;
+        } else {
+          if (c.group !== filter) return false;
+        }
+      }
+      // bucket-specific filtering: if bucket.id === '' -> either show all OR if groupFilter empty we show all; 
+      // For specific bucket (like novye_shkolniki) show those with c.group === bucket.id
+      if (g.id === 'unassigned') {
+        if (c.group && c.group !== '') return false;
+      } else if (g.id) {
+        if (c.group !== g.id) return false;
+      } // else g.id === '' means "All" - include everything (subject to search/filter above)
+
+      // search filter
       if (q && !(String(c.childName).toLowerCase().includes(q) || String(c.telegramID).includes(q))) return false;
       return true;
     });
     const count = list.length;
+    // bucket id used for element id; for '' (All) use 'all'
+    const bucketId = g.id || 'all';
     return `<div class="group-bucket card" data-group="${g.id}">
-      <div class="group-title">${g.title} ${g.id ? `(${count})` : ''}</div>
-      <div class="bucket-body" id="bucket-${g.id || 'all'}">${list.map(c => renderChildHTML(c)).join('') || '<div style="padding:8px;color:#777">Пусто</div>'}</div>
+      <div class="group-title">${g.title} ${g.id ? `(${count})` : `(${count})`}</div>
+      <div class="bucket-body" id="bucket-${bucketId}">${list.map(c => renderChildHTML(c)).join('') || '<div style="padding:8px;color:#777">Пусто</div>'}</div>
     </div>`;
   }).join('');
   attachDragAndDrop();
@@ -120,7 +141,7 @@ function renderBuckets(){
 }
 
 function renderChildHTML(c){
-  return `<div class="child-row" draggable="true" data-telegram="${escapeHtml(c.telegramID)}" data-name="${escapeHtml(c.childName)}" data-group="${escapeHtml(c.group || '')}">
+  return `<div class="child-row" draggable="true" data-telegram="${escapeAttr(c.telegramID)}" data-name="${escapeAttr(c.childName)}" data-group="${escapeAttr(c.group || '')}">
     <div class="child-left">
       <div style="font-weight:700">${escapeHtml(c.childName)}</div>
       <div class="small-muted">ID: ${escapeHtml(c.telegramID)} • Осталось: <span class="remaining">${Number(c.remaining)}</span> • Отработки: <span class="extra">${Number(c.extra)}</span></div>
@@ -137,13 +158,10 @@ function renderChildHTML(c){
 // attach + / - handlers
 function attachControlHandlers(){
   document.querySelectorAll('.child-row').forEach(row => {
-    const telegram = row.getAttribute('data-telegram');
-    const name = row.getAttribute('data-name');
     const plus = row.querySelector('.btn-plus');
     const minus = row.querySelector('.btn-minus');
     const plusE = row.querySelector('.btn-plus-extra');
     const minusE = row.querySelector('.btn-minus-extra');
-
     plus.onclick = () => changeRemaining(row, +1);
     minus.onclick = () => changeRemaining(row, -1);
     plusE.onclick = () => changeExtra(row, +1);
@@ -178,7 +196,6 @@ async function changeRemaining(row, delta){
       alert(res.message || 'Ошибка изменения');
     } else {
       remEl.innerText = Number(res.remaining);
-      // update local cache
       const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === name);
       if (idx >= 0) allChildren[idx].remaining = Number(res.remaining);
     }
@@ -243,13 +260,11 @@ function attachDragAndDrop(){
       b.classList.remove('active');
       const tg = e.dataTransfer.getData('text/tg');
       const name = e.dataTransfer.getData('text/name');
-      const fromGroup = e.dataTransfer.getData('text/group');
       const toGroup = b.getAttribute('data-group') || '';
-      // quick UI move: find element being dragged and append to bucket
-      const el = document.querySelector(`.child-row[data-telegram="${cssEscape(tg)}"][data-name="${cssEscape(name)}"]`);
+      const el = document.querySelector(`.child-row[data-telegram="${cssEscapeAttr(tg)}"][data-name="${cssEscapeAttr(name)}"]`);
       if (!el) return;
+      // append element to bucket body
       b.querySelector('.bucket-body').appendChild(el);
-      // update data-group attribute
       el.setAttribute('data-group', toGroup);
       // call API to setGroup
       setGroupAPI(tg, name, toGroup, el);
@@ -261,15 +276,14 @@ function dragStart(e){
   this.classList.add('dragging');
   const tg = this.getAttribute('data-telegram');
   const name = this.getAttribute('data-name');
-  const grp = this.getAttribute('data-group') || '';
   e.dataTransfer.setData('text/tg', tg);
   e.dataTransfer.setData('text/name', name);
-  e.dataTransfer.setData('text/group', grp);
 }
 function dragEnd(){ this.classList.remove('dragging'); }
 
-function cssEscape(s){
-  return s.replace(/"/g,'&quot;').replace(/'/g,"\\'").replace(/\\/g,'\\\\');
+function cssEscapeAttr(s){
+  // for selector use, but we used attribute equals search, so just return the raw string
+  return s.replace(/"/g,'\\"');
 }
 
 // API call to set group
@@ -288,13 +302,10 @@ async function setGroupAPI(telegram, childName, group, el){
     const res = await resp.json();
     if (!res.success) {
       alert(res.message || 'Ошибка при смене группы');
-      // rollback UI: set attribute back to previous? For simplicity — force reload
       loadChildren();
     } else {
-      // update local cache
       const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === childName);
       if (idx >= 0) allChildren[idx].group = group;
-      // optional small highlight
       el.style.transition = 'background-color .25s';
       el.style.backgroundColor = 'rgba(43,140,255,0.06)';
       setTimeout(()=> el.style.backgroundColor = 'transparent', 600);
@@ -316,8 +327,9 @@ function exportCSV(){
   a.href = url; a.download = `children_all.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-// helper
-function escapeHtml(s){ if (s === undefined || s === null) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;'); }
+// helpers
+function escapeHtml(s){ if (s === undefined || s === null) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
+function escapeAttr(s){ return (s === undefined || s === null) ? '' : String(s).replace(/"/g,'&quot;'); }
 
 </script>
 </body>
