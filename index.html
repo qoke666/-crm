@@ -34,9 +34,14 @@
   .event-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;border:1px solid #f0f4fb;margin-bottom:6px}
   .btn-ghost{background:transparent;border:1px solid rgba(10,20,40,0.06);padding:6px 10px;border-radius:8px}
   .btn-main{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:10px}
-  input.select, select.select { padding:8px;border-radius:10px;border:1px solid rgba(10,20,40,0.06); }
+  input.select, select.select { padding:8px;border-radius:10px;border:1px solid rgba(10,20,40,0.06); width: 100%; }
   .time-inputs { display: flex; gap: 8px; align-items: center; }
   .time-inputs input { min-width: 100px; }
+  .day-section { margin-bottom: 16px; }
+  .day-header { font-weight: 700; margin-bottom: 8px; }
+  .event-row { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .event-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .event-info { display: flex; flex-direction: column; }
   @media(max-width:768px){
     body { padding: 12px; }
     .wrap { padding: 0 12px; }
@@ -46,6 +51,8 @@
     .time-inputs { flex-direction: column; }
     .counter-col { flex-direction: column; gap: 4px; }
     .student-row { flex-direction: column; gap: 8px; align-items: stretch; }
+    .event-row { padding: 12px; }
+    .event-actions { justify-content: space-between; }
   }
 </style>
 </head>
@@ -55,10 +62,6 @@
     <div>
       <h2>CRM — тренер</h2>
       <div class="small-muted">Посещаемость • Распределение • Расписание</div>
-    </div>
-    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button id="refreshAll" class="tab-btn">Обновить</button>
-      <div class="small-muted">gasUrl: <span id="gasUrlShow"></span></div>
     </div>
   </div>
 
@@ -71,7 +74,7 @@
   <!-- ATTENDANCE -->
   <div id="attendance" class="card">
     <div class="row-gap" style="margin-bottom:12px">
-      <div>
+      <div style="flex:1">
         <label style="font-weight:700">Группа</label><br>
         <select id="attGroup" class="select">
           <option value="">— Все группы —</option>
@@ -82,13 +85,13 @@
         </select>
       </div>
 
-      <div style="margin-left:auto; display:flex;gap:8px;align-items:flex-end">
-        <button id="loadGroupStudents" class="btn-main">Загрузить список</button>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <button id="loadGroupStudents" class="btn-main">Загрузить</button>
       </div>
     </div>
 
     <div id="attendanceList">
-      <div class="small-muted">Нажмите «Загрузить список», чтобы подтянуть детей выбранной группы.</div>
+      <div class="small-muted">Нажмите «Загрузить», чтобы подтянуть детей выбранной группы.</div>
     </div>
   </div>
 
@@ -99,8 +102,8 @@
         <label style="font-weight:700">Поиск</label><br>
         <input id="distSearch" class="select" placeholder="По имени или ID" />
       </div>
-      <div style="margin-left:auto">
-        <button id="loadAllChildren" class="btn-main">Загрузить всех детей</button>
+      <div>
+        <button id="loadAllChildren" class="btn-main">Загрузить</button>
       </div>
     </div>
 
@@ -111,8 +114,8 @@
 
   <!-- SCHEDULE -->
   <div id="schedule" class="card" style="display:none">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-      <div>
+    <div class="row-gap" style="margin-bottom:12px">
+      <div style="flex:1">
         <label style="font-weight:700">День недели</label><br>
         <select id="schWeekday" class="select">
           <option value="1">Понедельник</option>
@@ -124,7 +127,7 @@
           <option value="0">Воскресенье</option>
         </select>
       </div>
-      <div>
+      <div style="flex:1">
         <label style="font-weight:700">Группа</label><br>
         <select id="schGroup" class="select">
           <option value="novye_shkolniki">Новые школьники</option>
@@ -133,7 +136,7 @@
           <option value="">Нераспределённые / Другое</option>
         </select>
       </div>
-      <div>
+      <div style="flex:1">
         <label style="font-weight:700">Время</label><br>
         <div class="time-inputs">
           <input id="schStartTime" type="time" class="select" value="17:30" />
@@ -141,15 +144,16 @@
           <input id="schEndTime" type="time" class="select" value="18:30" />
         </div>
       </div>
-      <div style="min-width:160px">
+      <div style="flex:1">
         <label style="font-weight:700">Заметка</label><br>
         <input id="schNote" type="text" class="select" placeholder="Опционально" />
       </div>
-
-      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
-        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="schNotify"> Уведомить группу</label>
-        <button id="addScheduleEvent" class="btn-main">Добавить занятие</button>
-        <button id="loadScheduleBtn" class="btn btn-outline-secondary">Загрузить расписание</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="schNotify"> Уведомить группу</label>
+      <div>
+        <button id="addScheduleEvent" class="btn-main">Добавить</button>
+        <button id="loadScheduleBtn" class="btn btn-outline-secondary">Обновить</button>
       </div>
     </div>
 
@@ -162,7 +166,6 @@
 <script>
 /* ======= Поставь здесь свой WebApp URL ======= */
 const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec';
-document.getElementById('gasUrlShow').innerText = gasUrl;
 /* ============================================ */
 
 let allChildren = [];
@@ -182,13 +185,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     byId('distribution').style.display = tab === 'distribution' ? '' : 'none';
     byId('schedule').style.display = tab === 'schedule' ? '' : 'none';
   });
-});
-
-/* Refresh */
-byId('refreshAll').addEventListener('click', async ()=>{
-  await loadAllChildren();
-  await loadSchedule();
-  alert('Обновлено');
 });
 
 /* Init */
@@ -224,10 +220,10 @@ function renderDistributionList(){
   const wrap = byId('distributionList');
   if (!items.length) { wrap.innerHTML = '<div class="small-muted">Нет записей</div>'; return; }
   wrap.innerHTML = items.map(c => {
-    return `<div class="event-row">
-      <div style="display:flex;gap:12px;align-items:center;min-width:0">
+    return `<div class="student-row" data-tg="${esc(c.telegramID)}" data-name="${esc(c.childName)}">
+      <div class="student-left">
         <div class="initials">${esc((c.childName||'').slice(0,2).toUpperCase())}</div>
-        <div style="min-width:0">
+        <div>
           <div style="font-weight:700">${esc(c.childName)}</div>
           <div class="small-info">ID: ${esc(c.telegramID)} • Осталось: ${Number(c.remaining||0)} • Отработок: ${Number(c.extra||0)}</div>
         </div>
@@ -333,19 +329,11 @@ function renderAttendanceList(children){
     const extraValDisplay = row.querySelector('.extra-val-display');
 
     // Helper to update local cache and display (optimistic)
-    function updateLocalAndDisplay(action, delta, displayEl, valKey, backupVal) {
+    function updateLocalAndDisplay(delta, displayEl, valKey) {
       const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
       if (!child) return;
       child[valKey] = Math.max(0, Number(child[valKey] || 0) + delta);
       displayEl.textContent = child[valKey];
-      // If API fails, rollback
-      setTimeout(() => {
-        if (backupVal !== undefined && child[valKey] !== backupVal) {
-          child[valKey] = backupVal;
-          displayEl.textContent = backupVal;
-          alert('Ошибка сохранения, значение откатилось');
-        }
-      }, 5000); // Timeout for rollback if needed, but usually API succeeds
     }
 
     // Optimistic dec remaining
@@ -353,13 +341,14 @@ function renderAttendanceList(children){
       const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
       if (!child) return;
       const backupRem = Number(child.remaining || 0);
-      updateLocalAndDisplay('decRemaining', -1, remValDisplay, 'remaining', backupRem);
+      updateLocalAndDisplay(-1, remValDisplay, 'remaining');
       try {
         await callIncDec('decRemaining', tg, name);
       } catch (err) {
         // Rollback on error
         child.remaining = backupRem;
         remValDisplay.textContent = backupRem;
+        alert('Ошибка сохранения, значение откатилось');
         console.error(err);
       }
     });
@@ -369,13 +358,14 @@ function renderAttendanceList(children){
       const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
       if (!child) return;
       const backupRem = Number(child.remaining || 0);
-      updateLocalAndDisplay('incRemaining', +1, remValDisplay, 'remaining', backupRem);
+      updateLocalAndDisplay(+1, remValDisplay, 'remaining');
       try {
         await callIncDec('incRemaining', tg, name);
       } catch (err) {
         // Rollback on error
         child.remaining = backupRem;
         remValDisplay.textContent = backupRem;
+        alert('Ошибка сохранения, значение откатилось');
         console.error(err);
       }
     });
@@ -385,13 +375,14 @@ function renderAttendanceList(children){
       const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
       if (!child) return;
       const backupExtra = Number(child.extra || 0);
-      updateLocalAndDisplay('decExtra', -1, extraValDisplay, 'extra', backupExtra);
+      updateLocalAndDisplay(-1, extraValDisplay, 'extra');
       try {
         await callIncDec('decExtra', tg, name);
       } catch (err) {
         // Rollback on error
         child.extra = backupExtra;
         extraValDisplay.textContent = backupExtra;
+        alert('Ошибка сохранения, значение откатилось');
         console.error(err);
       }
     });
@@ -401,13 +392,14 @@ function renderAttendanceList(children){
       const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
       if (!child) return;
       const backupExtra = Number(child.extra || 0);
-      updateLocalAndDisplay('incExtra', +1, extraValDisplay, 'extra', backupExtra);
+      updateLocalAndDisplay(+1, extraValDisplay, 'extra');
       try {
         await callIncDec('incExtra', tg, name);
       } catch (err) {
         // Rollback on error
         child.extra = backupExtra;
         extraValDisplay.textContent = backupExtra;
+        alert('Ошибка сохранения, значение откатилось');
         console.error(err);
       }
     });
@@ -423,7 +415,7 @@ async function callIncDec(action, telegramID, childName){
     body.append('childName', childName);
     const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
     const res = await resp.json();
-    if (!res.success && typeof res.success !== 'undefined') console.warn('incDec failed',res);
+    if (!res.success && typeof res.success !== 'undefined') throw new Error('incDec failed');
     return res;
   } catch (err) { console.error(err); throw err; } // Re-throw for rollback
 }
@@ -485,18 +477,19 @@ function renderSchedule(){
   const order = [1,2,3,4,5,6,0];
   wrap.innerHTML = order.map(d=>{
     const items = byDay[String(d)] || [];
-    return `<div style="margin-bottom:10px">
-      <div style="font-weight:700;margin-bottom:6px">${weekdayName(d)} <span class="small-muted" style="font-weight:600">(${items.length})</span></div>
+    if (!items.length) return '';
+    return `<div class="day-section">
+      <div class="day-header">${weekdayName(d)} (${items.length})</div>
       <div>${items.map(it=>`
-        <div class="event-row" data-id="${esc(it.id)}">
-          <div>
+        <div class="student-row" data-id="${esc(it.id)}">
+          <div class="event-info">
             <div style="font-weight:700">${esc(it.group)}</div>
             <div class="small-muted">${esc(it.time)} ${it.note ? ' • '+esc(it.note):''}</div>
           </div>
-          <div style="display:flex;gap:8px">
+          <div class="event-actions">
             <button class="btn-ghost btn-edit-event" data-id="${esc(it.id)}">Править</button>
             <button class="btn-ghost btn-del-event" data-id="${esc(it.id)}">Удалить</button>
-            <button class="btn-main btn-notify-group" data-group="${esc(it.group)}">Уведомить группу</button>
+            <button class="btn-main btn-notify-group" data-group="${esc(it.group)}" style="font-size:14px">Уведомить</button>
           </div>
         </div>
       `).join('')}</div>
