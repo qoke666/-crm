@@ -3,416 +3,197 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CRM — группы, занятия и отработки</title>
+<title>CRM — расписание и группы</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-  body{background:#f5f8fb; font-family:Inter,system-ui,Arial; padding:14px;}
-  .card{border-radius:12px; box-shadow:0 8px 30px rgba(20,30,60,0.04); margin-bottom:12px;}
-  .groups { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
-  .group-bucket { min-width:200px; flex:1; border-radius:10px; background:#fff; border:1px dashed transparent; padding:8px; }
-  .group-bucket.active { border-color: rgba(43,140,255,0.25); box-shadow: 0 6px 18px rgba(43,140,255,0.06); }
-  .group-title { font-weight:700; margin-bottom:8px; font-size:0.95rem; display:flex; align-items:center; justify-content:space-between; }
-  .child-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eef3f7; cursor:grab; background:transparent; border-radius:8px;}
-  .child-row.dragging{opacity:0.5; transform:scale(0.98);}
-  .child-left { max-width:62%; }
-  .controls { display:flex; gap:6px; align-items:center; }
-  .btn-plus { background:#e6fff0; color:#007a33; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
-  .btn-minus { background:#ffe6e6; color:#b20000; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
-  .btn-plus-extra { background:#e6f7ff; color:#006fa6; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
-  .btn-minus-extra { background:#fff4e6; color:#b25a00; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
-  .small-muted{color:#6c757d;font-size:0.92rem;}
-  .bucket-body { min-height:80px; max-height:440px; overflow:auto; padding:6px; }
-  .search { max-width:360px; }
-  .badge-count { background: rgba(16,24,40,0.06); padding:6px 8px; border-radius:8px; font-weight:700; }
-  .action-show-all { font-size:0.9rem; }
-  @media(max-width:900px){ .groups { flex-direction:column; } .child-left{ max-width:100%; } }
+  body{background:#f5f8fb;font-family:Inter,system-ui,Arial;padding:14px;}
+  .card{border-radius:12px;box-shadow:0 8px 30px rgba(20,30,60,0.04);margin-bottom:12px;}
+  .tabs{display:flex;gap:8px;margin-bottom:12px;}
+  .tab button{padding:8px 12px;border-radius:8px;border:1px solid #e6eef6;background:#fff;}
+  .tab button.active{background:linear-gradient(90deg,#2B8CFF,#6ec3ff);color:#fff;border-color:#2B8CFF;}
+  .day-block{background:#fff;padding:12px;border-radius:10px;border:1px solid #eef6ff;margin-bottom:8px;}
+  .event-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;border:1px solid #f0f4fb;margin-bottom:6px;}
+  .btn-ghost{background:transparent;border:1px solid rgba(10,20,40,0.06);padding:6px 10px;border-radius:8px;}
+  .btn-primary{background:#2B8CFF;border-color:#2B8CFF;}
 </style>
 </head>
 <body>
-  <div class="container" style="max-width:1100px;">
-    <h3 class="mb-3">CRM — занятия и группы</h3>
-
-    <div class="card p-3 mb-3">
-      <div class="d-flex gap-2 flex-wrap">
-        <button id="btnRefresh" class="btn btn-outline-primary">Обновить список</button>
-        <input id="search" class="form-control search" placeholder="Поиск по имени или ID" />
-        <select id="groupFilter" class="form-select" style="max-width:240px;">
-          <option value="">Фильтр: все</option>
-          <option value="unassigned">Нераспределённые</option>
-          <option value="novye_shkolniki">Новые школьники</option>
-          <option value="doshkolniki">Дошкольники</option>
-          <option value="starii">Старшая группа</option>
+  <div class="container" style="max-width:980px;">
+    <h3>CRM — расписание</h3>
+    <div class="card p-3">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="tabs" id="weekdayTabs"></div>
+        <div style="margin-left:auto">
+          <button id="btnRefresh" class="btn btn-outline-primary">Обновить</button>
+        </div>
+      </div>
+      <div id="scheduleEditor" style="margin-top:12px"></div>
+    </div>
+    <div class="card p-3">
+      <h5>Добавить событие</h5>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <select id="evWeekday" class="form-select" style="width:160px;">
+          <option value="1">Понедельник</option>
+          <option value="2">Вторник</option>
+          <option value="3">Среда</option>
+          <option value="4">Четверг</option>
+          <option value="5">Пятница</option>
+          <option value="6">Суббота</option>
+          <option value="0">Воскресенье</option>
         </select>
-        <div class="ms-auto d-flex gap-2">
-          <button id="btnExport" class="btn btn-outline-secondary">Экспорт CSV</button>
-        </div>
-      </div>
-      <div class="small-muted mt-2">Перетаскивайте карточки между групповыми блоками (не из блока «Все»). Кнопки рядом меняют количество занятий и отработок. Нажмите карточку для быстрого назначения группы.</div>
-    </div>
-
-    <div class="groups" id="groupsWrap">
-      <!-- buckets рендерятся динамически -->
-    </div>
-  </div>
-
-  <!-- Modal: Show All (single list) -->
-  <div class="modal fade" id="modalAll" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Все дети</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-        </div>
-        <div class="modal-body">
-          <div id="allList" style="max-height:400px; overflow:auto;"></div>
-        </div>
+        <input id="evGroup" placeholder="Группа (пример: doshkolniki)" class="form-control" style="width:220px;" />
+        <input id="evTime" placeholder="Время (пример: 18:30 — 19:30)" class="form-control" style="width:220px;" />
+        <input id="evNote" placeholder="Заметка (опционально)" class="form-control" style="width:300px;" />
+        <button id="btnAddEvent" class="btn btn-primary">Добавить</button>
       </div>
     </div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-/* ====== Настройка: подставь свой URL Web App сюда ====== */
-const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec';
+const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- вставь свой
+const WEEKDAYS = {0:'Воскресенье',1:'Понедельник',2:'Вторник',3:'Среда',4:'Четверг',5:'Пятница',6:'Суббота'};
+let schedule = []; // массив записей из сервера
 
-let allChildren = []; // {telegramID, childName, remaining, extra, group}
-const bucketsOrder = [
-  { id: '', title: 'Все', special: true },
-  { id: 'unassigned', title: 'Нераспределённые' },
-  { id: 'novye_shkolniki', title: 'Новые школьники' },
-  { id: 'doshkolniki', title: 'Дошкольники' },
-  { id: 'starii', title: 'Старшая группа' }
-];
+document.getElementById('btnRefresh').addEventListener('click', loadSchedule);
+document.getElementById('btnAddEvent').addEventListener('click', addEvent);
 
-const btnRefresh = document.getElementById('btnRefresh');
-const groupsWrap = document.getElementById('groupsWrap');
-const searchEl = document.getElementById('search');
-const groupFilter = document.getElementById('groupFilter');
-const btnExport = document.getElementById('btnExport');
-
-btnRefresh.addEventListener('click', loadChildren);
-searchEl.addEventListener('input', renderBuckets);
-groupFilter.addEventListener('change', renderBuckets);
-btnExport.addEventListener('click', exportCSV);
-
-// ========== Load all children ==========
-async function loadChildren(){
-  groupsWrap.innerHTML = '<div class="card p-3">Загрузка...</div>';
-  try {
-    const resp = await fetch(`${gasUrl}?action=getAllChildren`);
-    const data = await resp.json();
-    if (!data.success) { groupsWrap.innerHTML = '<div class="card p-3 text-danger">Ошибка загрузки</div>'; return; }
-    allChildren = (data.children || []).map(c => ({
-      telegramID: c.telegramID || '',
-      childName: c.childName || '',
-      remaining: Number(c.remaining || 0),
-      extra: Number(c.extra || 0),
-      group: (c.group || '').trim()
-    }));
-    renderBuckets();
-  } catch (err) {
-    console.error(err);
-    groupsWrap.innerHTML = '<div class="card p-3 text-danger">Ошибка сети</div>';
-  }
-}
-
-// ========== Render buckets (no duplicates in DOM) ==========
-function renderBuckets(){
-  const q = (searchEl.value || '').toLowerCase().trim();
-  const filter = groupFilter.value; // '' or specific or 'unassigned'
-  groupsWrap.innerHTML = bucketsOrder.map(bucket => {
-    if (bucket.special) {
-      // для "Все" показываем заголовок и кнопку "Показать всех"
-      const total = allChildren.filter(c => (!q || c.childName.toLowerCase().includes(q) || c.telegramID.includes(q))).length;
-      return `<div class="group-bucket card" data-group="${bucket.id}">
-        <div class="group-title"><span>${bucket.title}</span><span><span class="badge-count">${total}</span> <button class="btn btn-sm btn-link action-show-all" data-bs-toggle="modal" data-bs-target="#modalAll">Показать всех</button></span></div>
-        <div class="bucket-body" id="bucket-${bucket.id || 'all'}"><div style="padding:8px;color:#777">Сводка: используйте кнопку «Показать всех» для управления. Перетаскивание из «Все» отключено.</div></div>
-      </div>`;
-    } else {
-      // compute items for this bucket
-      const items = allChildren.filter(c => {
-        // apply filter (если filter задан, показывать только выбранную группу или unassigned)
-        if (filter) {
-          if (filter === 'unassigned') {
-            if (c.group && c.group !== '') return false;
-          } else {
-            if (c.group !== filter) return false;
-          }
-        }
-        // bucket-specific: if bucket id is unassigned, include those with empty group
-        if (bucket.id === 'unassigned') {
-          if (c.group && c.group !== '') return false;
-        } else {
-          if (c.group !== bucket.id) return false;
-        }
-        // search
-        if (q && !(String(c.childName).toLowerCase().includes(q) || String(c.telegramID).includes(q))) return false;
-        return true;
-      });
-      const count = items.length;
-      const body = items.length ? items.map(c => renderChildHTML(c)).join('') : '<div style="padding:8px;color:#777">Пусто</div>';
-      return `<div class="group-bucket card" data-group="${bucket.id}">
-        <div class="group-title"><span>${bucket.title}</span><span class="badge-count">${count}</span></div>
-        <div class="bucket-body" id="bucket-${bucket.id}">${body}</div>
-      </div>`;
-    }
-  }).join('');
-  // fill modal with full list (single DOM list) so there is exactly one DOM node per child in modal view
-  renderModalAll();
-  attachDragAndDrop();
-  attachControlHandlers();
-  attachCardClickAssign();
-}
-
-// child HTML used inside buckets (each child will appear only in its assigned bucket or in unassigned)
-function renderChildHTML(c){
-  return `<div class="child-row" draggable="true" data-telegram="${escapeAttr(c.telegramID)}" data-name="${escapeAttr(c.childName)}" data-group="${escapeAttr(c.group || '')}">
-    <div class="child-left">
-      <div style="font-weight:700">${escapeHtml(c.childName)}</div>
-      <div class="small-muted">ID: ${escapeHtml(c.telegramID)} • Осталось: <span class="remaining">${Number(c.remaining)}</span> • Отработок: <span class="extra">${Number(c.extra)}</span></div>
-    </div>
-    <div class="controls">
-      <button class="btn-plus-extra" title="Добавить отработку">+E</button>
-      <button class="btn-minus-extra" title="Убрать отработку">−E</button>
-      <button class="btn-plus" title="Добавить занятие">+</button>
-      <button class="btn-minus" title="Убавить занятие">−</button>
-    </div>
-  </div>`;
-}
-
-// Modal list (single master list) — each child appears here exactly once
-function renderModalAll(){
-  const q = (searchEl.value || '').toLowerCase().trim();
-  const list = allChildren.filter(c => !q || c.childName.toLowerCase().includes(q) || c.telegramID.includes(q));
-  const html = list.length ? list.map(c => {
-    return `<div class="child-row" data-telegram="${escapeAttr(c.telegramID)}" data-name="${escapeAttr(c.childName)}" data-group="${escapeAttr(c.group || '')}" style="cursor:default;">
-      <div class="child-left"><div style="font-weight:700">${escapeHtml(c.childName)}</div><div class="small-muted">ID: ${escapeHtml(c.telegramID)} • Осталось: ${c.remaining} • Отработок: ${c.extra}</div></div>
-      <div class="small-muted">Группа: ${escapeHtml(c.group || '—')}</div>
-    </div>`;
-  }).join('') : '<div style="padding:8px;color:#777">Список пуст</div>';
-  document.getElementById('allList').innerHTML = html;
-}
-
-// ========== Controls attach ==========
-function attachControlHandlers(){
-  document.querySelectorAll('.child-row').forEach(row => {
-    const plus = row.querySelector('.btn-plus');
-    const minus = row.querySelector('.btn-minus');
-    const plusE = row.querySelector('.btn-plus-extra');
-    const minusE = row.querySelector('.btn-minus-extra');
-    if (plus) plus.onclick = () => changeRemaining(row, +1);
-    if (minus) minus.onclick = () => changeRemaining(row, -1);
-    if (plusE) plusE.onclick = () => changeExtra(row, +1);
-    if (minusE) minusE.onclick = () => changeExtra(row, -1);
-  });
-}
-
-// click on card => open small selector to assign group
-function attachCardClickAssign(){
-  document.querySelectorAll('.group-bucket .child-row').forEach(row => {
-    row.onclick = (e) => {
-      // prevent clicks on control buttons bubbling
-      if (e.target.closest('button')) return;
-      openAssignPopup(row);
-    };
-  });
-}
-
-// ======== API calls for + / - =========
-async function changeRemaining(row, delta){
-  const telegram = row.getAttribute('data-telegram');
-  const name = row.getAttribute('data-name');
-  const remEl = row.querySelector('.remaining');
-  const cur = Number(remEl.innerText || 0);
-  const newVal = Math.max(0, cur + delta);
-  remEl.innerText = newVal; // optimistic
-
-  const action = delta > 0 ? 'incRemaining' : 'decRemaining';
-  const params = new URLSearchParams();
-  params.append('action', action);
-  params.append('telegramID', telegram);
-  params.append('childName', name);
-
-  try {
-    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: params.toString() });
-    const res = await resp.json();
-    if (!res.success) { remEl.innerText = cur; return alert(res.message || 'Ошибка изменения'); }
-    remEl.innerText = Number(res.remaining);
-    const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === name);
-    if (idx >= 0) allChildren[idx].remaining = Number(res.remaining);
-  } catch (err) { console.error(err); remEl.innerText = cur; alert('Ошибка сети'); }
-}
-
-async function changeExtra(row, delta){
-  const telegram = row.getAttribute('data-telegram');
-  const name = row.getAttribute('data-name');
-  const extraEl = row.querySelector('.extra');
-  const cur = Number(extraEl.innerText || 0);
-  const newVal = Math.max(0, cur + delta);
-  extraEl.innerText = newVal;
-
-  const action = delta > 0 ? 'incExtra' : 'decExtra';
-  const params = new URLSearchParams();
-  params.append('action', action);
-  params.append('telegramID', telegram);
-  params.append('childName', name);
-
-  try {
-    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: params.toString() });
-    const res = await resp.json();
-    if (!res.success) { extraEl.innerText = cur; return alert(res.message || 'Ошибка изменения отработки'); }
-    extraEl.innerText = Number(res.extra);
-    const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === name);
-    if (idx >= 0) allChildren[idx].extra = Number(res.extra);
-  } catch (err) { console.error(err); extraEl.innerText = cur; alert('Ошибка сети'); }
-}
-
-// ========== Drag & Drop ==========
-function attachDragAndDrop(){
-  // only allow drag for buckets _not_ special 'All'
-  document.querySelectorAll('.group-bucket').forEach(bucket => {
-    const bucketId = bucket.getAttribute('data-group');
-    const isAll = bucketId === '';
-    const rows = bucket.querySelectorAll('.child-row');
-    rows.forEach(r => {
-      if (isAll) {
-        // disable dragging from All: remove draggable attribute if present
-        r.draggable = false;
-      } else {
-        r.draggable = true;
-      }
-      r.addEventListener('dragstart', dragStart);
-      r.addEventListener('dragend', dragEnd);
-    });
-  });
-
-  document.querySelectorAll('.group-bucket').forEach(b => {
-    // allow drop to all buckets except All? We will allow drop to groups and unassigned; disallow drop into All
-    const groupId = b.getAttribute('data-group');
-    const allowDrop = groupId !== ''; // only group/unassigned accept drop
-    b.addEventListener('dragover', e => { if (allowDrop) { e.preventDefault(); b.classList.add('active'); } });
-    b.addEventListener('dragleave', () => b.classList.remove('active'));
-    b.addEventListener('drop', e => {
-      e.preventDefault();
-      b.classList.remove('active');
-      if (!allowDrop) return;
-      const tg = e.dataTransfer.getData('text/tg');
-      const name = e.dataTransfer.getData('text/name');
-      const toGroup = b.getAttribute('data-group') || '';
-      // move the single DOM node representing this child from wherever it exists (we must remove duplicates if any)
-      // find element by attributes (note: there may be an instance in modal; but we move the bucket instance)
-      let el = document.querySelector(`.group-bucket [data-telegram="${cssEscapeAttr(tg)}"][data-name="${cssEscapeAttr(name)}"]`);
-      if (!el) {
-        // perhaps child was not rendered in buckets (shouldn't happen) - fallback: reload
-        loadChildren();
-        return;
-      }
-      // append to target bucket body
-      const body = b.querySelector('.bucket-body');
-      body.appendChild(el);
-      el.setAttribute('data-group', toGroup);
-      // update server
-      setGroupAPI(tg, name, toGroup, el);
-    });
-  });
-}
-
-function dragStart(e){
-  this.classList.add('dragging');
-  e.dataTransfer.setData('text/tg', this.getAttribute('data-telegram'));
-  e.dataTransfer.setData('text/name', this.getAttribute('data-name'));
-}
-function dragEnd(){ this.classList.remove('dragging'); }
-
-// ========== Set group API ==========
-async function setGroupAPI(telegram, childName, group, el){
-  try {
-    const params = new URLSearchParams();
-    params.append('action','setGroup');
-    params.append('telegramID', telegram);
-    params.append('childName', childName);
-    params.append('group', group);
-    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: params.toString() });
-    const res = await resp.json();
-    if (!res.success) { alert(res.message || 'Ошибка при смене группы'); loadChildren(); return; }
-    // update local cache
-    const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === childName);
-    if (idx >= 0) allChildren[idx].group = group;
-    // visual flicker
-    if (el) {
-      el.style.transition = 'background-color .25s';
-      el.style.backgroundColor = 'rgba(43,140,255,0.06)';
-      setTimeout(()=> el.style.backgroundColor = 'transparent', 600);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Ошибка сети при смене группы'); loadChildren();
-  }
-}
-
-// ========== Click-to-assign popup ==========
-function openAssignPopup(row){
-  const telegram = row.getAttribute('data-telegram');
-  const name = row.getAttribute('data-name');
-  // simple prompt with select
-  const options = [
-    { v: '', t: 'Нераспределённые' },
-    { v: 'novye_shkolniki', t: 'Новые школьники' },
-    { v: 'doshkolniki', t: 'Дошкольники' },
-    { v: 'starii', t: 'Старшая группа' }
-  ];
-  const current = row.getAttribute('data-group') || '';
-  let html = `<div style="padding:12px;">
-    <div style="font-weight:700;margin-bottom:8px">${escapeHtml(name)}</div>
-    <label class="form-label small">Выберите группу</label>
-    <select id="assignSelect" class="form-select">`;
-  html += options.map(o => `<option value="${o.v}" ${o.v===current?'selected':''}>${o.t}</option>`).join('');
-  html += `</select>
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button id="assignSave" class="btn btn-primary">Сохранить</button>
-      <button id="assignCancel" class="btn btn-outline-secondary">Отменить</button>
-    </div>
-  </div>`;
-  // create floating popup near row
-  const popup = document.createElement('div');
-  popup.style.position='fixed';
-  popup.style.left='50%'; popup.style.top='50%'; popup.style.transform='translate(-50%,-50%)';
-  popup.style.zIndex = 3000;
-  popup.style.background = '#fff';
-  popup.style.borderRadius = '10px';
-  popup.style.boxShadow = '0 12px 40px rgba(10,20,40,0.12)';
-  popup.innerHTML = html;
-  document.body.appendChild(popup);
-  document.getElementById('assignCancel').onclick = () => popup.remove();
-  document.getElementById('assignSave').onclick = async () => {
-    const sel = document.getElementById('assignSelect').value;
-    popup.remove();
-    await setGroupAPI(telegram, name, sel, row);
-    renderBuckets();
+// build weekday tabs
+const tabsWrap = document.getElementById('weekdayTabs');
+[1,2,3,4,5,6,0].forEach(w => {
+  const btn = document.createElement('button');
+  btn.className = 'tab btn-ghost';
+  btn.innerText = WEEKDAYS[w];
+  btn.dataset.w = w;
+  btn.onclick = () => {
+    document.querySelectorAll('#weekdayTabs .tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    renderDay(w);
   };
+  tabsWrap.appendChild(btn);
+});
+// activate today
+const todayW = (new Date()).getDay();
+const todayBtn = Array.from(tabsWrap.children).find(b => b.dataset.w == todayW);
+if (todayBtn) { todayBtn.classList.add('active'); }
+
+// load schedule from server
+async function loadSchedule(){
+  document.getElementById('scheduleEditor').innerHTML = '<div>Загрузка...</div>';
+  try {
+    const resp = await fetch(gasUrl + '?action=getSchedule');
+    const data = await resp.json();
+    if (!data.success) return document.getElementById('scheduleEditor').innerHTML = '<div class="text-danger">Ошибка загрузки</div>';
+    schedule = data.schedule || [];
+    renderDay(todayW);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('scheduleEditor').innerHTML = '<div class="text-danger">Ошибка сети</div>';
+  }
+}
+loadSchedule();
+
+function renderDay(weekday) {
+  const container = document.getElementById('scheduleEditor');
+  const items = schedule.filter(s => Number(s.weekday) === Number(weekday));
+  container.innerHTML = `<h5 style="margin-bottom:10px">${WEEKDAYS[weekday]}</h5>`;
+  if (!items.length) {
+    container.innerHTML += '<div class="day-block">Нет событий</div>';
+    return;
+  }
+  const block = document.createElement('div');
+  items.forEach(ev => {
+    const row = document.createElement('div');
+    row.className = 'event-row';
+    row.innerHTML = `<div><div style="font-weight:700">${escapeHtml(ev.group || '—')}</div><div style="color:#6c757d">${escapeHtml(ev.time || '')} ${ev.note? ' • '+escapeHtml(ev.note):''}</div></div>
+      <div style="display:flex;gap:8px"><button class="btn-ghost" data-id="${ev.id}" onclick="editEvent('${ev.id}')">Править</button><button class="btn-ghost" data-id="${ev.id}" onclick="deleteEvent('${ev.id}')">Удалить</button><button class="btn btn-primary" data-id="${ev.group}" onclick="notifyGroup('${escapeJs(ev.group)}')">Уведомить группу</button></div>`;
+    block.appendChild(row);
+  });
+  container.appendChild(block);
 }
 
-// ========== Export CSV ==========
-function exportCSV(){
-  const rows = allChildren.map(c => [c.telegramID, c.childName, c.remaining, c.extra, c.group]);
-  let csv = 'telegramID,childName,remaining,extra,group\n' + rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `children_all.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+function escapeHtml(s){ if (!s) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeJs(s){ return (s||'').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
+
+// add
+async function addEvent(){
+  const weekday = document.getElementById('evWeekday').value;
+  const group = document.getElementById('evGroup').value.trim();
+  const time = document.getElementById('evTime').value.trim();
+  const note = document.getElementById('evNote').value.trim();
+  if (!group || !time) return alert('Заполните группу и время');
+  try {
+    const body = new URLSearchParams();
+    body.append('action','setSchedule');
+    body.append('mode','add');
+    body.append('weekday', weekday);
+    body.append('group', group);
+    body.append('time', time);
+    body.append('note', note);
+    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+    const res = await resp.json();
+    if (res.success) {
+      alert('Добавлено');
+      document.getElementById('evGroup').value=''; document.getElementById('evTime').value=''; document.getElementById('evNote').value='';
+      await loadSchedule();
+    } else alert(res.message||'Ошибка');
+  } catch (err) { console.error(err); alert('Ошибка сети'); }
 }
 
-// ========== Utilities ==========
-function escapeHtml(s){ if (s===undefined||s===null) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
-function escapeAttr(s){ return (s===undefined||s===null)?'':String(s).replace(/"/g,'&quot;'); }
-function cssEscapeAttr(s){ return (s===undefined||s===null)?'':s.replace(/"/g,'\\"'); }
+// edit (open prompt)
+window.editEvent = async function(id) {
+  const ev = schedule.find(s=>s.id===id);
+  if (!ev) return alert('Событие не найдено');
+  const newGroup = prompt('Группа', ev.group) || ev.group;
+  const newTime = prompt('Время', ev.time) || ev.time;
+  const newNote = prompt('Заметка', ev.note || '') || ev.note || '';
+  try {
+    const body = new URLSearchParams();
+    body.append('action','setSchedule');
+    body.append('mode','update');
+    body.append('id', id);
+    body.append('weekday', ev.weekday);
+    body.append('group', newGroup);
+    body.append('time', newTime);
+    body.append('note', newNote);
+    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+    const res = await resp.json();
+    if (res.success) { alert('Сохранено'); await loadSchedule(); } else alert(res.message||'Ошибка');
+  } catch (err) { console.error(err); alert('Ошибка сети'); }
+};
 
-// init modal loader for bootstrap
-const modalAll = new bootstrap.Modal(document.getElementById('modalAll'));
-document.querySelector('[data-bs-target="#modalAll"]')?.addEventListener('click', ()=> modalAll.show());
+// delete
+window.deleteEvent = async function(id) {
+  if (!confirm('Удалить это событие?')) return;
+  try {
+    const body = new URLSearchParams();
+    body.append('action','setSchedule');
+    body.append('mode','delete');
+    body.append('id', id);
+    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+    const res = await resp.json();
+    if (res.success) { alert('Удалено'); await loadSchedule(); } else alert(res.message||'Ошибка');
+  } catch (err) { console.error(err); alert('Ошибка сети'); }
+};
 
-// initial load
-loadChildren();
+// notify group (send message to parents of that group)
+window.notifyGroup = async function(group) {
+  if (!group) return alert('Пустая группа');
+  const message = prompt('Сообщение для группы ' + group, 'В расписании произошли изменения. Проверьте новое время занятий.');
+  if (message === null) return;
+  try {
+    const body = new URLSearchParams();
+    body.append('action','notifyGroupChange');
+    body.append('group', group);
+    body.append('message', message);
+    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+    const res = await resp.json();
+    if (res.success) {
+      alert('Уведомлено: ' + res.count);
+    } else {
+      alert(res.message || 'Ошибка отправки уведомлений');
+    }
+  } catch (err) { console.error(err); alert('Ошибка сети'); }
+};
 </script>
 </body>
 </html>
