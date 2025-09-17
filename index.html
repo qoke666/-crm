@@ -3,128 +3,321 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CRM — Редактировать занятия</title>
+<title>CRM — Управление занятиями и группами</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
   body{background:#f5f8fb; font-family:Inter,system-ui,Arial; padding:14px;}
   .card{border-radius:12px; box-shadow:0 8px 30px rgba(20,30,60,0.04); margin-bottom:12px;}
-  .child-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #eef3f7;}
-  .child-row:last-child{border-bottom:0;}
-  .controls button{width:36px;height:36px;border-radius:8px;border:0;font-weight:700;}
-  .controls .minus{background:#ffe6e6;color:#b20000;}
-  .controls .plus{background:#e6fff0;color:#007a33;}
+  .groups { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .group-bucket { min-width:150px; flex:1; border-radius:10px; background:#fff; border:1px dashed transparent; padding:8px; }
+  .group-bucket.active { border-color: rgba(43,140,255,0.25); box-shadow: 0 6px 18px rgba(43,140,255,0.06); }
+  .group-title { font-weight:700; margin-bottom:8px; font-size:0.95rem; }
+  .child-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eef3f7; cursor:grab; background:transparent; border-radius:8px;}
+  .child-row.dragging{opacity:0.5; transform:scale(0.98);}
+  .child-left { max-width:60%; }
+  .controls { display:flex; gap:6px; align-items:center; }
+  /* обычные занятия: зелёный/красный */
+  .btn-plus { background:#e6fff0; color:#007a33; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
+  .btn-minus { background:#ffe6e6; color:#b20000; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
+  /* отработки: бирюзовый/оранжевый */
+  .btn-plus-extra { background:#e6f7ff; color:#006fa6; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
+  .btn-minus-extra { background:#fff4e6; color:#b25a00; border:0; border-radius:8px; width:36px; height:36px; font-weight:700; }
   .small-muted{color:#6c757d;font-size:0.92rem;}
+  .bucket-body { min-height:80px; max-height:420px; overflow:auto; padding:6px; }
+  .search { max-width:360px; }
+  @media(max-width:700px){ .groups { flex-direction:column; } .child-left{ max-width:100%; } }
 </style>
 </head>
 <body>
-  <div class="container" style="max-width:760px;">
-    <h3 class="mb-3">CRM — Быстро поправить количество занятий</h3>
+  <div class="container" style="max-width:980px;">
+    <h3 class="mb-3">CRM — занятия и группы</h3>
 
     <div class="card p-3 mb-3">
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 flex-wrap">
         <button id="btnRefresh" class="btn btn-outline-primary">Обновить список</button>
-        <input id="search" class="form-control" placeholder="Поиск по имени или ID" style="max-width:320px"/>
+        <input id="search" class="form-control search" placeholder="Поиск по имени или ID" />
+        <select id="groupFilter" class="form-select" style="max-width:220px;">
+          <option value="">Показать: Все группы</option>
+          <option value="novye_shkolniki">Новые школьники</option>
+          <option value="doshkolniki">Дошкольники</option>
+          <option value="starii">Старшая группа</option>
+        </select>
       </div>
-      <div class="small-muted mt-2">Нажмите + чтобы прибавить занятие, − чтобы списать. Изменения сохраняются мгновенно.</div>
+      <div class="small-muted mt-2">Перетаскивайте карточки между группами, чтобы присвоить группу ребёнку. Кнопки рядом меняют количество занятий (обычные и отработки).</div>
     </div>
 
-    <div class="card p-0" id="childrenCard">
-      <div id="childrenList" style="padding:8px;color:#777">Нажмите "Обновить список"</div>
+    <!-- группы -->
+    <div class="groups" id="groupsWrap">
+      <!-- buckets динамически -->
+    </div>
+
+    <div class="card p-3">
+      <div class="d-flex gap-2">
+        <button id="btnExport" class="btn btn-outline-secondary">Экспорт CSV</button>
+        <div class="small-muted ms-auto">Данные синхронизируются мгновенно при нажатии +/− или при перемещении.</div>
+      </div>
     </div>
   </div>
 
 <script>
-const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- замени на свой
+const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- замени если нужно
+
+let allChildren = []; // каждый элемент: {telegramID, childName, remaining, extra, group}
+const groupsList = [
+  { id: '', title: 'Все' },
+  { id: 'novye_shkolniki', title: 'Новые школьники' },
+  { id: 'doshkolniki', title: 'Дошкольники' },
+  { id: 'starii', title: 'Старшая группа' }
+];
+
 const btnRefresh = document.getElementById('btnRefresh');
-const childrenList = document.getElementById('childrenList');
+const childrenWrap = document.getElementById('groupsWrap');
 const searchEl = document.getElementById('search');
-
-let allChildren = [];
-
+const groupFilter = document.getElementById('groupFilter');
 btnRefresh.addEventListener('click', loadChildren);
-searchEl.addEventListener('input', renderChildren);
+searchEl.addEventListener('input', renderBuckets);
+groupFilter.addEventListener('change', renderBuckets);
+document.getElementById('btnExport').addEventListener('click', exportCSV);
 
 async function loadChildren(){
-  childrenList.innerHTML = '<div style="padding:12px;color:#666">Загрузка...</div>';
+  childrenWrap.innerHTML = '<div class="card p-3">Загрузка...</div>';
   try {
     const resp = await fetch(`${gasUrl}?action=getAllChildren`);
     const data = await resp.json();
-    if (!data.success) { childrenList.innerHTML = '<div style="padding:12px;color:#c00">Ошибка загрузки</div>'; return; }
+    if (!data.success) { childrenWrap.innerHTML = '<div class="card p-3 text-danger">Ошибка загрузки</div>'; return; }
     allChildren = data.children || [];
-    renderChildren();
+    // normalize group values (empty string if undefined)
+    allChildren = allChildren.map(c => ({ ...c, group: c.group || '' }));
+    renderBuckets();
   } catch (err) {
     console.error(err);
-    childrenList.innerHTML = '<div style="padding:12px;color:#c00">Ошибка сети</div>';
+    childrenWrap.innerHTML = '<div class="card p-3 text-danger">Ошибка сети</div>';
   }
 }
 
-function renderChildren(){
+function renderBuckets(){
   const q = (searchEl.value || '').toLowerCase().trim();
-  const list = allChildren.filter(c => !q || c.childName.toLowerCase().includes(q) || c.telegramID.includes(q));
-  if (list.length === 0) { childrenList.innerHTML = '<div style="padding:12px;color:#666">Ничего не найдено</div>'; return; }
-  childrenList.innerHTML = list.map(c => {
-    return `<div class="child-row" data-telegram="${escapeHtml(c.telegramID)}" data-name="${escapeHtml(c.childName)}">
-      <div>
-        <div style="font-weight:700">${escapeHtml(c.childName)}</div>
-        <div class="small-muted">ID: ${escapeHtml(c.telegramID)} • Осталось: <span class="remaining">${Number(c.remaining)}</span></div>
-      </div>
-      <div class="controls" style="display:flex;gap:8px;align-items:center">
-        <button class="minus" title="Убавить">−</button>
-        <button class="plus" title="Прибавить">+</button>
-      </div>
+  const filterGroup = groupFilter.value;
+  childrenWrap.innerHTML = groupsList.map(g => {
+    // compute header with count
+    const list = allChildren.filter(c => {
+      if (filterGroup && g.id !== '' && g.id !== filterGroup) return false;
+      if (filterGroup && g.id === '' && filterGroup) return false;
+      // if bucket is specific group, show only that group
+      if (g.id && c.group !== g.id) return false;
+      // if bucket is 'all' (id === ''), show all groups (unless groupFilter restricts)
+      if (q && !(String(c.childName).toLowerCase().includes(q) || String(c.telegramID).includes(q))) return false;
+      return true;
+    });
+    const count = list.length;
+    return `<div class="group-bucket card" data-group="${g.id}">
+      <div class="group-title">${g.title} ${g.id ? `(${count})` : ''}</div>
+      <div class="bucket-body" id="bucket-${g.id || 'all'}">${list.map(c => renderChildHTML(c)).join('') || '<div style="padding:8px;color:#777">Пусто</div>'}</div>
     </div>`;
   }).join('');
-  // attach handlers
+  attachDragAndDrop();
+  attachControlHandlers();
+}
+
+function renderChildHTML(c){
+  return `<div class="child-row" draggable="true" data-telegram="${escapeHtml(c.telegramID)}" data-name="${escapeHtml(c.childName)}" data-group="${escapeHtml(c.group || '')}">
+    <div class="child-left">
+      <div style="font-weight:700">${escapeHtml(c.childName)}</div>
+      <div class="small-muted">ID: ${escapeHtml(c.telegramID)} • Осталось: <span class="remaining">${Number(c.remaining)}</span> • Отработки: <span class="extra">${Number(c.extra)}</span></div>
+    </div>
+    <div class="controls">
+      <button class="btn-plus-extra" title="Добавить отработку">+E</button>
+      <button class="btn-minus-extra" title="Убрать отработку">−E</button>
+      <button class="btn-plus" title="Добавить занятие">+</button>
+      <button class="btn-minus" title="Убавить занятие">−</button>
+    </div>
+  </div>`;
+}
+
+// attach + / - handlers
+function attachControlHandlers(){
   document.querySelectorAll('.child-row').forEach(row => {
-    const minus = row.querySelector('.minus');
-    const plus = row.querySelector('.plus');
-    minus.addEventListener('click', () => changeRemaining(row, -1));
-    plus.addEventListener('click', () => changeRemaining(row, +1));
+    const telegram = row.getAttribute('data-telegram');
+    const name = row.getAttribute('data-name');
+    const plus = row.querySelector('.btn-plus');
+    const minus = row.querySelector('.btn-minus');
+    const plusE = row.querySelector('.btn-plus-extra');
+    const minusE = row.querySelector('.btn-minus-extra');
+
+    plus.onclick = () => changeRemaining(row, +1);
+    minus.onclick = () => changeRemaining(row, -1);
+    plusE.onclick = () => changeExtra(row, +1);
+    minusE.onclick = () => changeExtra(row, -1);
   });
 }
 
+// optimistic UI + server update for remaining
 async function changeRemaining(row, delta){
-  const telegramID = row.getAttribute('data-telegram');
-  const childName = row.getAttribute('data-name');
+  const telegram = row.getAttribute('data-telegram');
+  const name = row.getAttribute('data-name');
   const remEl = row.querySelector('.remaining');
-  let current = Number(remEl.innerText || 0);
-  // optimistic UI
-  const newVal = Math.max(0, current + delta);
-  remEl.innerText = newVal;
+  const cur = Number(remEl.innerText || 0);
+  const newVal = Math.max(0, cur + delta);
+  remEl.innerText = newVal; // optimistic
 
-  // choose action
   const action = delta > 0 ? 'incRemaining' : 'decRemaining';
-  // send as form-urlencoded to avoid preflight
   const params = new URLSearchParams();
   params.append('action', action);
-  params.append('telegramID', telegramID);
-  params.append('childName', childName);
+  params.append('telegramID', telegram);
+  params.append('childName', name);
 
   try {
     const resp = await fetch(gasUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      headers: {'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
       body: params.toString()
     });
-    const result = await resp.json();
-    if (!result.success) {
-      // rollback UI
-      remEl.innerText = current;
-      alert(result.message || 'Ошибка изменения');
+    const res = await resp.json();
+    if (!res.success) {
+      remEl.innerText = cur;
+      alert(res.message || 'Ошибка изменения');
     } else {
-      remEl.innerText = Number(result.remaining);
+      remEl.innerText = Number(res.remaining);
       // update local cache
-      const idx = allChildren.findIndex(c => c.telegramID === telegramID && c.childName === childName);
-      if (idx >= 0) allChildren[idx].remaining = Number(result.remaining);
+      const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === name);
+      if (idx >= 0) allChildren[idx].remaining = Number(res.remaining);
     }
   } catch (err) {
     console.error(err);
-    remEl.innerText = current;
+    remEl.innerText = cur;
     alert('Ошибка сети');
   }
 }
 
-function escapeHtml(s){ if (s === undefined || s === null) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;"); }
+// optimistic UI + server update for extra
+async function changeExtra(row, delta){
+  const telegram = row.getAttribute('data-telegram');
+  const name = row.getAttribute('data-name');
+  const extraEl = row.querySelector('.extra');
+  const cur = Number(extraEl.innerText || 0);
+  const newVal = Math.max(0, cur + delta);
+  extraEl.innerText = newVal;
+
+  const action = delta > 0 ? 'incExtra' : 'decExtra';
+  const params = new URLSearchParams();
+  params.append('action', action);
+  params.append('telegramID', telegram);
+  params.append('childName', name);
+
+  try {
+    const resp = await fetch(gasUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body: params.toString()
+    });
+    const res = await resp.json();
+    if (!res.success) {
+      extraEl.innerText = cur;
+      alert(res.message || 'Ошибка изменения отработки');
+    } else {
+      extraEl.innerText = Number(res.extra);
+      const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === name);
+      if (idx >= 0) allChildren[idx].extra = Number(res.extra);
+    }
+  } catch (err) {
+    console.error(err);
+    extraEl.innerText = cur;
+    alert('Ошибка сети');
+  }
+}
+
+// Drag & Drop
+function attachDragAndDrop(){
+  const rows = document.querySelectorAll('.child-row');
+  rows.forEach(r => {
+    r.addEventListener('dragstart', dragStart);
+    r.addEventListener('dragend', dragEnd);
+  });
+
+  const buckets = document.querySelectorAll('.group-bucket');
+  buckets.forEach(b => {
+    b.addEventListener('dragover', e => { e.preventDefault(); b.classList.add('active'); });
+    b.addEventListener('dragleave', () => b.classList.remove('active'));
+    b.addEventListener('drop', e => {
+      e.preventDefault();
+      b.classList.remove('active');
+      const tg = e.dataTransfer.getData('text/tg');
+      const name = e.dataTransfer.getData('text/name');
+      const fromGroup = e.dataTransfer.getData('text/group');
+      const toGroup = b.getAttribute('data-group') || '';
+      // quick UI move: find element being dragged and append to bucket
+      const el = document.querySelector(`.child-row[data-telegram="${cssEscape(tg)}"][data-name="${cssEscape(name)}"]`);
+      if (!el) return;
+      b.querySelector('.bucket-body').appendChild(el);
+      // update data-group attribute
+      el.setAttribute('data-group', toGroup);
+      // call API to setGroup
+      setGroupAPI(tg, name, toGroup, el);
+    });
+  });
+}
+
+function dragStart(e){
+  this.classList.add('dragging');
+  const tg = this.getAttribute('data-telegram');
+  const name = this.getAttribute('data-name');
+  const grp = this.getAttribute('data-group') || '';
+  e.dataTransfer.setData('text/tg', tg);
+  e.dataTransfer.setData('text/name', name);
+  e.dataTransfer.setData('text/group', grp);
+}
+function dragEnd(){ this.classList.remove('dragging'); }
+
+function cssEscape(s){
+  return s.replace(/"/g,'&quot;').replace(/'/g,"\\'").replace(/\\/g,'\\\\');
+}
+
+// API call to set group
+async function setGroupAPI(telegram, childName, group, el){
+  try {
+    const params = new URLSearchParams();
+    params.append('action','setGroup');
+    params.append('telegramID', telegram);
+    params.append('childName', childName);
+    params.append('group', group);
+    const resp = await fetch(gasUrl, {
+      method:'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body: params.toString()
+    });
+    const res = await resp.json();
+    if (!res.success) {
+      alert(res.message || 'Ошибка при смене группы');
+      // rollback UI: set attribute back to previous? For simplicity — force reload
+      loadChildren();
+    } else {
+      // update local cache
+      const idx = allChildren.findIndex(c => c.telegramID === telegram && c.childName === childName);
+      if (idx >= 0) allChildren[idx].group = group;
+      // optional small highlight
+      el.style.transition = 'background-color .25s';
+      el.style.backgroundColor = 'rgba(43,140,255,0.06)';
+      setTimeout(()=> el.style.backgroundColor = 'transparent', 600);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Ошибка сети при смене группы');
+    loadChildren();
+  }
+}
+
+// Export CSV (all children)
+function exportCSV(){
+  const rows = allChildren.map(c => [c.telegramID, c.childName, c.remaining, c.extra, c.group]);
+  let csv = 'telegramID,childName,remaining,extra,group\n' + rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `children_all.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+// helper
+function escapeHtml(s){ if (s === undefined || s === null) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;'); }
 
 </script>
 </body>
