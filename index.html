@@ -3,36 +3,116 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CRM — расписание и группы</title>
+<title>CRM — Посещаемость · Распределение · Расписание</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-  body{background:#f5f8fb;font-family:Inter,system-ui,Arial;padding:14px;}
-  .card{border-radius:12px;box-shadow:0 8px 30px rgba(20,30,60,0.04);margin-bottom:12px;}
-  .tabs{display:flex;gap:8px;margin-bottom:12px;}
-  .tab button{padding:8px 12px;border-radius:8px;border:1px solid #e6eef6;background:#fff;}
-  .tab button.active{background:linear-gradient(90deg,#2B8CFF,#6ec3ff);color:#fff;border-color:#2B8CFF;}
-  .day-block{background:#fff;padding:12px;border-radius:10px;border:1px solid #eef6ff;margin-bottom:8px;}
-  .event-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;border:1px solid #f0f4fb;margin-bottom:6px;}
-  .btn-ghost{background:transparent;border:1px solid rgba(10,20,40,0.06);padding:6px 10px;border-radius:8px;}
-  .btn-primary{background:#2B8CFF;border-color:#2B8CFF;}
+  :root{--accent:#2B8CFF;--muted:#6c757d;--bg:#f6f8fb;}
+  body{font-family:Inter,system-ui,Arial;background:var(--bg);padding:16px;margin:0}
+  .wrap{max-width:1100px;margin:0 auto}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  h2{margin:0;font-weight:700}
+  .tabs{display:flex;gap:8px;background:transparent}
+  .tab-btn{padding:8px 14px;border-radius:10px;border:1px solid rgba(10,20,40,0.06);background:#fff;cursor:pointer;font-weight:600}
+  .tab-btn.active{background:linear-gradient(90deg,var(--accent),#6ec3ff);color:#fff;border-color:var(--accent)}
+  .card{background:#fff;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(20,30,60,0.04);margin-bottom:12px}
+  .row-gap{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .small-muted{color:var(--muted);font-size:14px}
+  /* Attendance list */
+  .student-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;border:1px solid #eef4fb;margin-bottom:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
+  .student-left{display:flex;gap:12px;align-items:center}
+  .initials{width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,#ffd89b,#ffb199);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .present-btn{background:#e6fff0;color:#007a33;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+  .absent-btn{background:#ffe6e6;color:#b20000;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+  .switch { cursor:pointer; padding:6px 10px;border-radius:8px;border:1px solid rgba(10,20,40,0.06); background:#fff }
+  /* schedule editor */
+  .event-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;border:1px solid #f0f4fb;margin-bottom:6px}
+  .btn-ghost{background:transparent;border:1px solid rgba(10,20,40,0.06);padding:6px 10px;border-radius:8px}
+  .btn-main{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:10px}
+  .select, input[type=text]{padding:8px;border-radius:10px;border:1px solid rgba(10,20,40,0.06)}
+  @media(max-width:900px){ .row-gap{flex-direction:column; align-items:stretch} .top{flex-direction:column;align-items:flex-start} }
 </style>
 </head>
 <body>
-  <div class="container" style="max-width:980px;">
-    <h3>CRM — расписание</h3>
-    <div class="card p-3">
-      <div style="display:flex;gap:8px;align-items:center;">
-        <div class="tabs" id="weekdayTabs"></div>
-        <div style="margin-left:auto">
-          <button id="btnRefresh" class="btn btn-outline-primary">Обновить</button>
-        </div>
-      </div>
-      <div id="scheduleEditor" style="margin-top:12px"></div>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h2>CRM — Посещаемость · Распределение · Расписание</h2>
+      <div class="small-muted">Удобная панель для тренера. Ничего не ломает сервер.</div>
     </div>
-    <div class="card p-3">
-      <h5>Добавить событие</h5>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-        <select id="evWeekday" class="form-select" style="width:160px;">
+    <div style="margin-left:auto" class="row-gap">
+      <button id="refreshAll" class="tab-btn">Обновить</button>
+      <div class="small-muted">gasUrl: <span id="gasUrlShow"></span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="tab-btn active" data-tab="attendance">Посещаемость</button>
+    <button class="tab-btn" data-tab="distribution">Распределение</button>
+    <button class="tab-btn" data-tab="schedule">Расписание</button>
+  </div>
+
+  <!-- ATTENDANCE -->
+  <div id="attendance" class="card">
+    <div class="row-gap" style="margin-bottom:12px">
+      <div>
+        <label style="font-weight:700">Дата</label><br>
+        <input type="date" id="attDate" class="select" />
+      </div>
+
+      <div>
+        <label style="font-weight:700">Группа</label><br>
+        <select id="attGroup" class="select">
+          <option value="">— Выберите группу —</option>
+          <option value="novye_shkolniki">Новые школьники</option>
+          <option value="doshkolniki">Дошкольники</option>
+          <option value="starii">Старшая группа</option>
+          <option value="unassigned">Нераспределённые</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-weight:700">Действие при отметке посещения</label><br>
+        <select id="attAction" class="select" title="Что делать со счётом при отметке Present">
+          <option value="decrement_if_no_extra">Списывать: сначала отработки (если есть), иначе основное</option>
+          <option value="decrement_remaining">Всегда списывать из remaining</option>
+          <option value="do_not_change">Не менять балансы (только отметка)</option>
+        </select>
+      </div>
+
+      <div style="margin-left:auto; display:flex;gap:8px;align-items:flex-end">
+        <button id="loadGroupStudents" class="btn-main">Загрузить список</button>
+        <button id="saveAttendance" class="btn btn-outline-primary">Сохранить отметки</button>
+      </div>
+    </div>
+
+    <div id="attendanceList">
+      <div class="small-muted">Нажмите «Загрузить список», чтобы подтянуть детей выбранной группы.</div>
+    </div>
+  </div>
+
+  <!-- DISTRIBUTION -->
+  <div id="distribution" class="card" style="display:none">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <div>
+        <label style="font-weight:700">Поиск (имя / id)</label><br>
+        <input id="distSearch" class="select" placeholder="Поиск"/>
+      </div>
+      <div style="margin-left:auto">
+        <button id="loadAllChildren" class="btn-main">Загрузить всех детей</button>
+      </div>
+    </div>
+
+    <div id="distributionList">
+      <div class="small-muted">Загрузите список детей, чтобы распределить по группам.</div>
+    </div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div id="schedule" class="card" style="display:none">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <div>
+        <label style="font-weight:700">День недели</label><br>
+        <select id="schWeekday" class="select">
           <option value="1">Понедельник</option>
           <option value="2">Вторник</option>
           <option value="3">Среда</option>
@@ -41,86 +121,258 @@
           <option value="6">Суббота</option>
           <option value="0">Воскресенье</option>
         </select>
-        <input id="evGroup" placeholder="Группа (пример: doshkolniki)" class="form-control" style="width:220px;" />
-        <input id="evTime" placeholder="Время (пример: 18:30 — 19:30)" class="form-control" style="width:220px;" />
-        <input id="evNote" placeholder="Заметка (опционально)" class="form-control" style="width:300px;" />
-        <button id="btnAddEvent" class="btn btn-primary">Добавить</button>
+      </div>
+      <div>
+        <label style="font-weight:700">Группа</label><br>
+        <input id="schGroup" type="text" class="select" placeholder="novye_shkolniki / doshkolniki / starii" />
+      </div>
+      <div>
+        <label style="font-weight:700">Время</label><br>
+        <input id="schTime" type="text" class="select" placeholder="17:30 — 18:30" />
+      </div>
+      <div>
+        <label style="font-weight:700">Заметка</label><br>
+        <input id="schNote" type="text" class="select" placeholder="Опционально" />
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:end">
+        <button id="addScheduleEvent" class="btn-main">Добавить занятие</button>
+        <button id="loadScheduleBtn" class="btn btn-outline-secondary">Загрузить расписание</button>
       </div>
     </div>
+
+    <div id="scheduleList">
+      <div class="small-muted">Загрузите расписание недели, чтобы редактировать события.</div>
+    </div>
   </div>
+</div>
 
 <script>
-const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec'; // <- вставь свой
-const WEEKDAYS = {0:'Воскресенье',1:'Понедельник',2:'Вторник',3:'Среда',4:'Четверг',5:'Пятница',6:'Суббота'};
-let schedule = []; // массив записей из сервера
+/* ================== Настройка: замените на свой WebApp URL ================== */
+const gasUrl = 'https://script.google.com/macros/s/AKfycbyI17STyEsL6vYDBX1d98YElOk9O7KWTwMUL7DxOulDzSkgPXLASnNCfsA1GvNWfM_fEA/exec';
+document.getElementById('gasUrlShow').innerText = gasUrl;
+/* ========================================================================== */
 
-document.getElementById('btnRefresh').addEventListener('click', loadSchedule);
-document.getElementById('btnAddEvent').addEventListener('click', addEvent);
+let allChildren = []; // cache from getAllChildren
+let scheduleCache = []; // cache schedule
 
-// build weekday tabs
-const tabsWrap = document.getElementById('weekdayTabs');
-[1,2,3,4,5,6,0].forEach(w => {
-  const btn = document.createElement('button');
-  btn.className = 'tab btn-ghost';
-  btn.innerText = WEEKDAYS[w];
-  btn.dataset.w = w;
-  btn.onclick = () => {
-    document.querySelectorAll('#weekdayTabs .tab').forEach(t=>t.classList.remove('active'));
+// helpers
+function esc(s){ if(s===undefined||s===null) return ''; return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function qstr(obj){ return Object.entries(obj).map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&'); }
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    renderDay(w);
-  };
-  tabsWrap.appendChild(btn);
+    const tab = btn.dataset.tab;
+    document.getElementById('attendance').style.display = tab === 'attendance' ? '' : 'none';
+    document.getElementById('distribution').style.display = tab === 'distribution' ? '' : 'none';
+    document.getElementById('schedule').style.display = tab === 'schedule' ? '' : 'none';
+  });
 });
-// activate today
-const todayW = (new Date()).getDay();
-const todayBtn = Array.from(tabsWrap.children).find(b => b.dataset.w == todayW);
-if (todayBtn) { todayBtn.classList.add('active'); }
 
-// load schedule from server
-async function loadSchedule(){
-  document.getElementById('scheduleEditor').innerHTML = '<div>Загрузка...</div>';
+// Refresh all caches
+document.getElementById('refreshAll').addEventListener('click', async ()=>{
+  await loadAllChildren();
+  await loadSchedule();
+  alert('Обновлено');
+});
+
+/* -------------------- LOAD CHILDREN -------------------- */
+async function loadAllChildren(){
+  document.getElementById('distributionList').innerHTML = 'Загрузка...';
   try {
-    const resp = await fetch(gasUrl + '?action=getSchedule');
+    const resp = await fetch(`${gasUrl}?action=getAllChildren`);
     const data = await resp.json();
-    if (!data.success) return document.getElementById('scheduleEditor').innerHTML = '<div class="text-danger">Ошибка загрузки</div>';
-    schedule = data.schedule || [];
-    renderDay(todayW);
+    if (!data.success) throw new Error('Ошибка сервера');
+    allChildren = data.children || [];
+    renderDistributionList();
+    return allChildren;
   } catch (err) {
     console.error(err);
-    document.getElementById('scheduleEditor').innerHTML = '<div class="text-danger">Ошибка сети</div>';
+    document.getElementById('distributionList').innerHTML = '<div class="small-muted text-danger">Ошибка загрузки детей</div>';
   }
 }
-loadSchedule();
+document.getElementById('loadAllChildren').addEventListener('click', loadAllChildren);
 
-function renderDay(weekday) {
-  const container = document.getElementById('scheduleEditor');
-  const items = schedule.filter(s => Number(s.weekday) === Number(weekday));
-  container.innerHTML = `<h5 style="margin-bottom:10px">${WEEKDAYS[weekday]}</h5>`;
-  if (!items.length) {
-    container.innerHTML += '<div class="day-block">Нет событий</div>';
-    return;
-  }
-  const block = document.createElement('div');
-  items.forEach(ev => {
-    const row = document.createElement('div');
-    row.className = 'event-row';
-    row.innerHTML = `<div><div style="font-weight:700">${escapeHtml(ev.group || '—')}</div><div style="color:#6c757d">${escapeHtml(ev.time || '')} ${ev.note? ' • '+escapeHtml(ev.note):''}</div></div>
-      <div style="display:flex;gap:8px"><button class="btn-ghost" data-id="${ev.id}" onclick="editEvent('${ev.id}')">Править</button><button class="btn-ghost" data-id="${ev.id}" onclick="deleteEvent('${ev.id}')">Удалить</button><button class="btn btn-primary" data-id="${ev.group}" onclick="notifyGroup('${escapeJs(ev.group)}')">Уведомить группу</button></div>`;
-    block.appendChild(row);
+/* -------------------- DISTRIBUTION -------------------- */
+function renderDistributionList(filter=''){
+  const list = document.getElementById('distributionList');
+  const q = document.getElementById('distSearch').value.trim().toLowerCase();
+  const items = allChildren.filter(c => {
+    if (q && !( (c.childName||'').toLowerCase().includes(q) || (c.telegramID||'').includes(q) )) return false;
+    return true;
   });
-  container.appendChild(block);
+  if (!items.length) { list.innerHTML = '<div class="small-muted">Нет записей</div>'; return; }
+  list.innerHTML = items.map(c => {
+    const g = esc(c.group||'');
+    return `<div class="event-row" title="ID:${esc(c.telegramID)}">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="width:44px"><div class="initials">${esc((c.childName||'').slice(0,2).toUpperCase())}</div></div>
+        <div>
+          <div style="font-weight:700">${esc(c.childName)}</div>
+          <div class="small-muted">ID: ${esc(c.telegramID)} • Осталось: ${Number(c.remaining||0)} • Отработок: ${Number(c.extra||0)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select data-tg="${esc(c.telegramID)}" data-name="${esc(c.childName)}" class="select group-select">
+          <option value="">— Нераспределённые —</option>
+          <option value="novye_shkolniki" ${g==='novye_shkolniki'?'selected':''}>Новые школьники</option>
+          <option value="doshkolniki" ${g==='doshkolniki'?'selected':''}>Дошкольники</option>
+          <option value="starii" ${g==='starii'?'selected':''}>Старшая группа</option>
+        </select>
+        <button class="btn-ghost btn-save-group" data-tg="${esc(c.telegramID)}" data-name="${esc(c.childName)}">Сохранить</button>
+      </div>
+    </div>`;
+  }).join('');
+  // attach handlers
+  document.querySelectorAll('.btn-save-group').forEach(b=>{
+    b.addEventListener('click', async (e)=>{
+      const tg = b.dataset.tg;
+      const name = b.dataset.name;
+      const sel = document.querySelector(`select[data-tg="${CSS.escape(tg)}"][data-name="${CSS.escape(name)}"]`);
+      const group = sel ? sel.value : '';
+      await setGroupAPI(tg, decodeURIComponent(name), group);
+      await loadAllChildren(); // refresh cache
+      alert('Группа назначена');
+    });
+  });
+}
+document.getElementById('distSearch').addEventListener('input', ()=> renderDistributionList());
+
+async function setGroupAPI(telegramID, childName, group){
+  try {
+    const body = new URLSearchParams();
+    body.append('action','setGroup');
+    body.append('telegramID', telegramID);
+    body.append('childName', childName);
+    body.append('group', group);
+    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+    const res = await resp.json();
+    if (!res.success) throw new Error(res.message || 'Ошибка setGroup');
+    return res;
+  } catch (err) {
+    console.error(err);
+    alert('Ошибка назначения группы');
+  }
 }
 
-function escapeHtml(s){ if (!s) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function escapeJs(s){ return (s||'').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
+/* -------------------- ATTENDANCE -------------------- */
+document.getElementById('loadGroupStudents').addEventListener('click', async ()=>{
+  const group = document.getElementById('attGroup').value;
+  if (!group) { alert('Выберите группу'); return; }
+  const date = document.getElementById('attDate').value;
+  if (!date) {
+    // default today
+    const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); document.getElementById('attDate').value = d.toISOString().slice(0,10);
+  }
+  // load children (all), then filter by group (group may be 'unassigned')
+  if (!allChildren.length) await loadAllChildren();
+  const filtered = allChildren.filter(c => {
+    if (group === 'unassigned') return !c.group || c.group === '';
+    return c.group === group;
+  });
+  renderAttendanceList(filtered);
+});
 
-// add
-async function addEvent(){
-  const weekday = document.getElementById('evWeekday').value;
-  const group = document.getElementById('evGroup').value.trim();
-  const time = document.getElementById('evTime').value.trim();
-  const note = document.getElementById('evNote').value.trim();
-  if (!group || !time) return alert('Заполните группу и время');
+function renderAttendanceList(children){
+  const wrap = document.getElementById('attendanceList');
+  if (!children || !children.length) { wrap.innerHTML = '<div class="small-muted">Нет детей в группе</div>'; return; }
+  // build list with toggles (default Absent)
+  wrap.innerHTML = children.map(c => {
+    return `<div class="student-row" data-tg="${esc(c.telegramID)}" data-name="${esc(c.childName)}" data-remaining="${Number(c.remaining||0)}" data-extra="${Number(c.extra||0)}">
+      <div class="student-left">
+        <div class="initials">${esc((c.childName||'').slice(0,2).toUpperCase())}</div>
+        <div>
+          <div style="font-weight:700">${esc(c.childName)}</div>
+          <div class="small-muted">ID: ${esc(c.telegramID)} • Осталось: ${Number(c.remaining||0)} • Отработок: ${Number(c.extra||0)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="switch btn-present">Присутствовал</button>
+        <button class="switch btn-absent">Отсутствовал</button>
+      </div>
+    </div>`;
+  }).join('');
+  // attach toggles (default: absent)
+  document.querySelectorAll('.student-row').forEach(row=>{
+    const presentBtn = row.querySelector('.btn-present');
+    const absentBtn = row.querySelector('.btn-absent');
+    absentBtn.style.opacity = '0.6';
+    presentBtn.addEventListener('click', ()=> {
+      presentBtn.style.opacity = '1'; absentBtn.style.opacity = '0.6';
+      row.dataset.att = 'present';
+    });
+    absentBtn.addEventListener('click', ()=> {
+      absentBtn.style.opacity = '1'; presentBtn.style.opacity = '0.6';
+      row.dataset.att = 'absent';
+    });
+    // init as absent
+    row.dataset.att = 'absent';
+  });
+}
+
+// Save attendance: iterate rows and apply decrements according to attAction
+document.getElementById('saveAttendance').addEventListener('click', async ()=>{
+  const rows = Array.from(document.querySelectorAll('#attendanceList .student-row'));
+  if (!rows.length) { alert('Нет данных для сохранения'); return; }
+  const action = document.getElementById('attAction').value;
+  const autoApply = action !== 'do_not_change';
+  if (!confirm('Сохранить отметки посещаемости?')) return;
+  // process each present
+  for (const row of rows) {
+    const att = row.dataset.att;
+    const tg = row.dataset.tg;
+    const name = row.dataset.name;
+    if (att === 'present') {
+      if (autoApply) {
+        // fetch latest child data from cache
+        const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
+        const extra = child ? Number(child.extra||0) : Number(row.dataset.extra||0);
+        const remaining = child ? Number(child.remaining||0) : Number(row.dataset.remaining||0);
+        if (action === 'decrement_if_no_extra') {
+          if (extra > 0) {
+            await callIncDec('decExtra', tg, name);
+          } else {
+            await callIncDec('decRemaining', tg, name);
+          }
+        } else if (action === 'decrement_remaining') {
+          await callIncDec('decRemaining', tg, name);
+        }
+      } // else just mark (we do not persist attendance records in this simple version)
+    }
+  }
+  // refresh children cache after operations
+  await loadAllChildren();
+  alert('Отметки сохранены и балансы обновлены (если выбрано).');
+});
+
+/* helper to call inc/dec endpoints */
+async function callIncDec(action, telegramID, childName){
+  try {
+    const body = new URLSearchParams();
+    body.append('action', action);
+    body.append('telegramID', telegramID);
+    body.append('childName', childName);
+    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+    const res = await resp.json();
+    if (!res.success) {
+      console.warn('callIncDec failed', action, telegramID, childName, res);
+    }
+    return res;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/* -------------------- SCHEDULE -------------------- */
+document.getElementById('loadScheduleBtn').addEventListener('click', loadSchedule);
+document.getElementById('addScheduleEvent').addEventListener('click', async ()=>{
+  const weekday = document.getElementById('schWeekday').value;
+  const group = document.getElementById('schGroup').value.trim();
+  const time = document.getElementById('schTime').value.trim();
+  const note = document.getElementById('schNote').value.trim();
+  if (!group || !time) return alert('Укажите группу и время');
   try {
     const body = new URLSearchParams();
     body.append('action','setSchedule');
@@ -131,69 +383,132 @@ async function addEvent(){
     body.append('note', note);
     const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
     const res = await resp.json();
-    if (res.success) {
-      alert('Добавлено');
-      document.getElementById('evGroup').value=''; document.getElementById('evTime').value=''; document.getElementById('evNote').value='';
-      await loadSchedule();
-    } else alert(res.message||'Ошибка');
-  } catch (err) { console.error(err); alert('Ошибка сети'); }
+    if (!res.success) throw new Error(res.message||'Ошибка добавления');
+    await loadSchedule();
+    alert('Занятие добавлено');
+  } catch (err) { console.error(err); alert('Ошибка добавления занятия'); }
+});
+
+async function loadSchedule(){
+  document.getElementById('scheduleList').innerHTML = '<div class="small-muted">Загрузка...</div>';
+  try {
+    const resp = await fetch(`${gasUrl}?action=getSchedule`);
+    const data = await resp.json();
+    if (!data.success) throw new Error('Ошибка сервера');
+    scheduleCache = data.schedule || [];
+    renderSchedule();
+  } catch (err) {
+    console.error(err);
+    document.getElementById('scheduleList').innerHTML = '<div class="small-muted text-danger">Ошибка загрузки расписания</div>';
+  }
 }
 
-// edit (open prompt)
-window.editEvent = async function(id) {
-  const ev = schedule.find(s=>s.id===id);
-  if (!ev) return alert('Событие не найдено');
-  const newGroup = prompt('Группа', ev.group) || ev.group;
-  const newTime = prompt('Время', ev.time) || ev.time;
-  const newNote = prompt('Заметка', ev.note || '') || ev.note || '';
-  try {
-    const body = new URLSearchParams();
-    body.append('action','setSchedule');
-    body.append('mode','update');
-    body.append('id', id);
-    body.append('weekday', ev.weekday);
-    body.append('group', newGroup);
-    body.append('time', newTime);
-    body.append('note', newNote);
-    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
-    const res = await resp.json();
-    if (res.success) { alert('Сохранено'); await loadSchedule(); } else alert(res.message||'Ошибка');
-  } catch (err) { console.error(err); alert('Ошибка сети'); }
-};
-
-// delete
-window.deleteEvent = async function(id) {
-  if (!confirm('Удалить это событие?')) return;
-  try {
-    const body = new URLSearchParams();
-    body.append('action','setSchedule');
-    body.append('mode','delete');
-    body.append('id', id);
-    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
-    const res = await resp.json();
-    if (res.success) { alert('Удалено'); await loadSchedule(); } else alert(res.message||'Ошибка');
-  } catch (err) { console.error(err); alert('Ошибка сети'); }
-};
-
-// notify group (send message to parents of that group)
-window.notifyGroup = async function(group) {
-  if (!group) return alert('Пустая группа');
-  const message = prompt('Сообщение для группы ' + group, 'В расписании произошли изменения. Проверьте новое время занятий.');
-  if (message === null) return;
-  try {
-    const body = new URLSearchParams();
-    body.append('action','notifyGroupChange');
-    body.append('group', group);
-    body.append('message', message);
-    const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
-    const res = await resp.json();
-    if (res.success) {
+function renderSchedule(){
+  const wrap = document.getElementById('scheduleList');
+  if (!scheduleCache.length) { wrap.innerHTML = '<div class="small-muted">Расписание пустое</div>'; return; }
+  // group by weekday
+  const byDay = {};
+  scheduleCache.forEach(s => {
+    const wd = String(s.weekday||'0');
+    if (!byDay[wd]) byDay[wd]=[];
+    byDay[wd].push(s);
+  });
+  // render days in order Mon..Sun
+  const daysOrder = [1,2,3,4,5,6,0];
+  wrap.innerHTML = daysOrder.map(d => {
+    const items = byDay[String(d)] || [];
+    return `<div style="margin-bottom:10px">
+      <div style="font-weight:700;margin-bottom:6px">${weekdayName(d)} <span class="small-muted" style="font-weight:600">(${items.length})</span></div>
+      <div>${items.map(it => `
+        <div class="event-row" data-id="${esc(it.id)}">
+          <div>
+            <div style="font-weight:700">${esc(it.group)}</div>
+            <div class="small-muted">${esc(it.time)} ${it.note ? ' • '+esc(it.note):''}</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-ghost btn-edit-event" data-id="${esc(it.id)}">Править</button>
+            <button class="btn-ghost btn-del-event" data-id="${esc(it.id)}">Удалить</button>
+            <button class="btn-main btn-notify-group" data-group="${esc(it.group)}">Уведомить группу</button>
+          </div>
+        </div>
+      `).join('')}</div>
+    </div>`;
+  }).join('');
+  // attach actions
+  document.querySelectorAll('.btn-edit-event').forEach(b=>b.addEventListener('click', async ()=>{
+    const id = b.dataset.id;
+    const ev = scheduleCache.find(x=>x.id===id);
+    if (!ev) return alert('Событие не найдено');
+    const newGroup = prompt('Группа', ev.group) || ev.group;
+    const newTime = prompt('Время', ev.time) || ev.time;
+    const newNote = prompt('Заметка', ev.note||'') || ev.note||'';
+    // update
+    try {
+      const body = new URLSearchParams();
+      body.append('action','setSchedule');
+      body.append('mode','update');
+      body.append('id', id);
+      body.append('weekday', ev.weekday);
+      body.append('group', newGroup);
+      body.append('time', newTime);
+      body.append('note', newNote);
+      const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+      const res = await resp.json();
+      if (!res.success) throw new Error(res.message||'Ошибка');
+      await loadSchedule();
+      alert('Событие обновлено');
+    } catch (err) { console.error(err); alert('Ошибка обновления'); }
+  }));
+  document.querySelectorAll('.btn-del-event').forEach(b=>b.addEventListener('click', async ()=>{
+    const id = b.dataset.id;
+    if (!confirm('Удалить событие?')) return;
+    try {
+      const body = new URLSearchParams();
+      body.append('action','setSchedule');
+      body.append('mode','delete');
+      body.append('id', id);
+      const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+      const res = await resp.json();
+      if (!res.success) throw new Error(res.message||'Ошибка');
+      await loadSchedule();
+      alert('Событие удалено');
+    } catch (err) { console.error(err); alert('Ошибка удаления'); }
+  }));
+  document.querySelectorAll('.btn-notify-group').forEach(b=>b.addEventListener('click', async ()=>{
+    const group = b.dataset.group;
+    const message = prompt('Сообщение для группы ' + group, 'В расписании произошли изменения. Проверьте новое время занятий.');
+    if (message === null) return;
+    try {
+      const body = new URLSearchParams();
+      body.append('action','notifyGroupChange');
+      body.append('group', group);
+      body.append('message', message);
+      const resp = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString() });
+      const res = await resp.json();
+      if (!res.success) throw new Error(res.message || 'Ошибка отправки');
       alert('Уведомлено: ' + res.count);
-    } else {
-      alert(res.message || 'Ошибка отправки уведомлений');
-    }
-  } catch (err) { console.error(err); alert('Ошибка сети'); }
-};
+    } catch (err) { console.error(err); alert('Ошибка уведомления'); }
+  }));
+}
+
+function weekdayName(n){
+  return {0:'Воскресенье',1:'Понедельник',2:'Вторник',3:'Среда',4:'Четверг',5:'Пятница',6:'Суббота'}[n]||'';
+}
+
+/* -------------------- INIT -------------------- */
+async function init(){
+  // set default date to today in attendance
+  const d = new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  document.getElementById('attDate').value = d.toISOString().slice(0,10);
+  // load caches
+  await loadAllChildren();
+  await loadSchedule();
+}
+init();
+
+/* optional: auto refresh caches on focus */
+window.addEventListener('focus', async ()=>{ await loadAllChildren(); await loadSchedule(); });
+
 </script>
 </body>
 </html>
