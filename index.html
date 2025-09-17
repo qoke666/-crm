@@ -8,7 +8,7 @@
 <style>
   :root{--accent:#2B8CFF;--muted:#6c757d;--bg:#f6f8fb;}
   html,body{height:100%;margin:0;background:var(--bg);font-family:Inter,system-ui,Arial;padding:12px}
-  .wrap{max-width:980px;margin:0 auto}
+  .wrap{max-width:800px;margin:0 auto}
   .top{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
   h2{margin:0;font-weight:700}
   .tabs{display:flex;gap:8px;flex-wrap:wrap}
@@ -21,8 +21,6 @@
   .student-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;border:1px solid #eef4fb;margin-bottom:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
   .student-left{display:flex;gap:12px;align-items:center;min-width:0}
   .initials{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,#ffd89b,#ffb199);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
-  .present-btn{background:#e6fff0;color:#007a33;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
-  .absent-btn{background:#ffe6e6;color:#b20000;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
   .switch { cursor:pointer; padding:6px 10px;border-radius:8px;border:1px solid rgba(10,20,40,0.06); background:#fff }
   .small-info{font-size:13px;color:var(--muted)}
   /* controls for +/- */
@@ -33,10 +31,17 @@
   .btn-ghost{background:transparent;border:1px solid rgba(10,20,40,0.06);padding:6px 10px;border-radius:8px}
   .btn-main{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:10px}
   input.select, select.select { padding:8px;border-radius:10px;border:1px solid rgba(10,20,40,0.06); }
-  @media(max-width:780px){
+  .time-inputs { display: flex; gap: 8px; align-items: center; }
+  .time-inputs input { min-width: 100px; }
+  @media(max-width:768px){
+    body { padding: 12px; }
+    .wrap { padding: 0 12px; }
     .student-left { min-width: 0; }
     .initials { width:40px;height:40px }
     .row-gap { flex-direction:column; align-items:stretch }
+    .time-inputs { flex-direction: column; }
+    .counter-col { flex-direction: column; gap: 4px; }
+    .student-row { flex-direction: column; gap: 8px; align-items: stretch; }
   }
 </style>
 </head>
@@ -63,11 +68,6 @@
   <div id="attendance" class="card">
     <div class="row-gap" style="margin-bottom:12px">
       <div>
-        <label style="font-weight:700">Дата</label><br>
-        <input type="date" id="attDate" class="select" />
-      </div>
-
-      <div>
         <label style="font-weight:700">Группа</label><br>
         <select id="attGroup" class="select">
           <option value="">— Все группы —</option>
@@ -78,18 +78,8 @@
         </select>
       </div>
 
-      <div>
-        <label style="font-weight:700">Поведение при отметке Present</label><br>
-        <select id="attAction" class="select" title="Что делать со счётом при отметке Present">
-          <option value="decrement_if_no_extra">Списывать: сначала отработки (если есть), иначе основное</option>
-          <option value="decrement_remaining">Всегда списывать из remaining</option>
-          <option value="do_not_change">Не менять балансы (только отметка)</option>
-        </select>
-      </div>
-
       <div style="margin-left:auto; display:flex;gap:8px;align-items:flex-end">
         <button id="loadGroupStudents" class="btn-main">Загрузить список</button>
-        <button id="saveAttendance" class="btn btn-outline-primary">Сохранить заметки</button>
       </div>
     </div>
 
@@ -141,7 +131,11 @@
       </div>
       <div>
         <label style="font-weight:700">Время</label><br>
-        <input id="schTime" type="text" class="select" placeholder="17:30 — 18:30" />
+        <div class="time-inputs">
+          <input id="schStartTime" type="time" class="select" value="17:30" />
+          <span>—</span>
+          <input id="schEndTime" type="time" class="select" value="18:30" />
+        </div>
       </div>
       <div style="min-width:160px">
         <label style="font-weight:700">Заметка</label><br>
@@ -193,10 +187,8 @@ byId('refreshAll').addEventListener('click', async ()=>{
   alert('Обновлено');
 });
 
-/* Init date */
+/* Init */
 (function init(){
-  const d = new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
-  byId('attDate').value = d.toISOString().slice(0,10);
   loadAllChildren();
   loadSchedule();
 })();
@@ -320,11 +312,6 @@ function renderAttendanceList(children){
             <button class="counter-btn extra-inc" title="Добавить отработку">+</button>
           </div>
         </div>
-
-        <div style="display:flex;flex-direction:column;gap:6px;margin-left:6px">
-          <button class="btn-ghost mark-present">Присутствовал</button>
-          <button class="btn-ghost mark-absent">Отсутствовал</button>
-        </div>
       </div>
     </div>`;
   }).join('');
@@ -340,57 +327,37 @@ function renderAttendanceList(children){
     const extraInc = row.querySelector('.extra-inc');
     const remValDisplay = row.querySelector('.rem-val-display');
     const extraValDisplay = row.querySelector('.extra-val-display');
-    const markPresent = row.querySelector('.mark-present');
-    const markAbsent = row.querySelector('.mark-absent');
+
+    // Helper to update local cache and display
+    function updateLocalAndDisplay(action, delta) {
+      const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
+      if (!child) return;
+      if (action === 'incRemaining' || action === 'decRemaining') {
+        child.remaining = Math.max(0, Number(child.remaining || 0) + delta);
+        remValDisplay.textContent = child.remaining;
+      } else if (action === 'incExtra' || action === 'decExtra') {
+        child.extra = Math.max(0, Number(child.extra || 0) + delta);
+        extraValDisplay.textContent = child.extra;
+      }
+    }
 
     remDec.addEventListener('click', async ()=>{
       await callIncDec('decRemaining', tg, name);
-      await refreshChildRow(tg, row);
+      updateLocalAndDisplay('decRemaining', -1);
     });
     remInc.addEventListener('click', async ()=>{
       await callIncDec('incRemaining', tg, name);
-      await refreshChildRow(tg, row);
+      updateLocalAndDisplay('incRemaining', +1);
     });
     extraDec.addEventListener('click', async ()=>{
       await callIncDec('decExtra', tg, name);
-      await refreshChildRow(tg, row);
+      updateLocalAndDisplay('decExtra', -1);
     });
     extraInc.addEventListener('click', async ()=>{
       await callIncDec('incExtra', tg, name);
-      await refreshChildRow(tg, row);
+      updateLocalAndDisplay('incExtra', +1);
     });
-
-    // mark present/absent (visual only unless save)
-    markPresent.addEventListener('click', ()=> {
-      row.dataset.att = 'present';
-      markPresent.style.background = '#e6fff0';
-      markPresent.style.border = '1px solid #b5f0c9';
-      markAbsent.style.background = 'transparent';
-      markAbsent.style.border = '1px solid rgba(10,20,40,0.06)';
-    });
-    markAbsent.addEventListener('click', ()=> {
-      row.dataset.att = 'absent';
-      markAbsent.style.background = '#fff0f0';
-      markAbsent.style.border = '1px solid #f2b8b8';
-      markPresent.style.background = 'transparent';
-      markPresent.style.border = '1px solid rgba(10,20,40,0.06)';
-    });
-
-    // default absent
-    row.dataset.att = 'absent';
   });
-}
-
-/* refresh single child row (simple: refresh cache and update values) */
-async function refreshChildRow(telegramID, rowEl){
-  await loadAllChildren(); // refresh cache
-  const child = allChildren.find(c => String(c.telegramID) === String(telegramID));
-  if (child) {
-    const rem = rowEl.querySelectorAll('.rem-val-display');
-    rem.forEach(el => el.textContent = Number(child.remaining||0));
-    const ex = rowEl.querySelectorAll('.extra-val-display');
-    ex.forEach(el => el.textContent = Number(child.extra||0));
-  }
 }
 
 /* call inc/dec endpoints */
@@ -407,48 +374,14 @@ async function callIncDec(action, telegramID, childName){
   } catch (err) { console.error(err); }
 }
 
-/* save attendance: if chosen auto-decrement option, also apply decrements for those marked present (but user can do manual +/- too) */
-byId = id => document.getElementById(id);
-byId('saveAttendance').addEventListener('click', async ()=>{
-  const rows = Array.from(document.querySelectorAll('#attendanceList .student-row'));
-  if (!rows.length) { alert('Нет данных для сохранения'); return; }
-  const action = byId('attAction').value;
-  const autoApply = action !== 'do_not_change';
-  if (!confirm('Сохранить отметки посещаемости?')) return;
-  for (const row of rows) {
-    const att = row.dataset.att;
-    const tg = row.dataset.tg;
-    const name = row.dataset.name;
-    if (att === 'present' && autoApply) {
-      // If teacher already pressed minus manually, don't double-decrement — we cannot reliably know, so we will NOT auto-decrement if user already changed value manually.
-      // To be safe: check cache child remaining/extra vs DOM displayed numbers; if equal, apply automatic decrement; else skip.
-      const child = allChildren.find(c => String(c.telegramID) === String(tg) && c.childName === name);
-      if (!child) continue;
-      const domRem = Number(row.querySelector('.rem-val-display').textContent || 0);
-      const domExtra = Number(row.querySelector('.extra-val-display').textContent || 0);
-      // if DOM equals cache => no manual change done => perform automatic decrement according to policy
-      if (domRem === Number(child.remaining||0) && domExtra === Number(child.extra||0)) {
-        if (action === 'decrement_if_no_extra') {
-          if (Number(child.extra||0) > 0) await callIncDec('decExtra', tg, name);
-          else await callIncDec('decRemaining', tg, name);
-        } else if (action === 'decrement_remaining') {
-          await callIncDec('decRemaining', tg, name);
-        }
-      } else {
-        // manual adjustments already applied — skip auto
-      }
-    }
-  }
-  await loadAllChildren();
-  alert('Отметки сохранены.');
-});
-
 /* ---------------- Schedule ---------------- */
 byId('loadScheduleBtn').addEventListener('click', loadSchedule);
 byId('addScheduleEvent').addEventListener('click', async ()=>{
   const weekday = byId('schWeekday').value;
   const group = byId('schGroup').value;
-  const time = byId('schTime').value.trim();
+  const startTime = byId('schStartTime').value;
+  const endTime = byId('schEndTime').value;
+  const time = startTime && endTime ? `${startTime} — ${endTime}` : '';
   const note = byId('schNote').value;
   const notify = byId('schNotify').checked;
   if (!time || group===undefined) return alert('Заполните группу и время');
@@ -521,7 +454,9 @@ function renderSchedule(){
     const ev = scheduleCache.find(x=>x.id===id);
     if (!ev) return alert('Событие не найдено');
     const newGroup = prompt('Группа', ev.group) || ev.group;
-    const newTime = prompt('Время', ev.time) || ev.time;
+    const newStart = prompt('Начало (HH:MM)', ev.time.split(' — ')[0]) || ev.time.split(' — ')[0];
+    const newEnd = prompt('Конец (HH:MM)', ev.time.split(' — ')[1]) || ev.time.split(' — ')[1];
+    const newTime = `${newStart} — ${newEnd}`;
     const newNote = prompt('Заметка', ev.note||'') || ev.note||'';
     try {
       const body = new URLSearchParams();
